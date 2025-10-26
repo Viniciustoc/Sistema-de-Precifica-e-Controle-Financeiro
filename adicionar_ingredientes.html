@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Adicionar Ingredientes - {{ receita['nome'] }}
+{% endblock %}
+
+{% block subtitle %}
+    Adicionando ingredientes a: {{ receita['nome'] }}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+        <h1>{{ receita['nome'] }}</h1>
+        <a href="{{ url_for('ver_receita', receita_id=receita['id']) }}" class="btn btn-secondary">
+            👁️ Ver Resumo da Receita
+        </a>
+    </div>
+
+    <h2>🥄 Adicionar Novo Ingrediente</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label for="nome_ingrediente">Ingrediente:</label>
+            <input type="text"
+                   name="nome_ingrediente"
+                   id="nome_ingrediente"
+                   placeholder="Ex: leite condensado, chocolate em pó..."
+                   required>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+                <label for="quantidade">Quantidade:</label>
+                <input type="number"
+                       step="any"
+                       name="quantidade"
+                       id="quantidade"
+                       placeholder="Ex: 395, 200, 1..."
+                       required>
+            </div>
+
+            <div class="form-group" style="flex: 1;">
+                <label for="unidade">Unidade:</label>
+                <select name="unidade" id="unidade" required>
+                    <option value="">Selecione</option>
+                    <option value="g">Gramas (g)</option>
+                    <option value="kg">Quilogramas (kg)</option>
+                    <option value="ml">Mililitros (ml)</option>
+                    <option value="l">Litros (l)</option>
+                    <option value="colher">Colher de Sopa</option>
+                    <option value="xícara">Xícara</option>
+                    <option value="unidade">Unidade</option>
+                    <option value="pitada">Pitada</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <button type="submit" class="btn btn-primary">
+                ➕ Adicionar Ingrediente
+            </button>
+        </div>
+    </form>
+</div>
+
+{% if ingredientes %}
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2>📋 Ingredientes da Receita ({{ ingredientes|length }})</h2>
+            <span class="total-cost" style="font-size: 1rem; padding: 0.5rem 1rem;">Custo: R$ {{ "%.2f"|format(custo_total) }}</span>
+        </div>
+
+        <ul class="item-list">
+            {% for ingr in ingredientes %}
+                <li class="item-list-item">
+                    <div class="item-info">
+                        <span class="item-name">{{ ingr['nome'] }}</span>
+                        <span class="item-details">- {{ ingr['quantidade'] }} {{ ingr['unidade'] }}</span>
+                    </div>
+                    <div class="item-actions">
+                        <a href="{{ url_for('editar_ingrediente', ingrediente_receita_id=ingr['id']) }}" class="btn btn-small btn-secondary" title="Editar quantidade">
+                            ✏️ Editar
+                        </a>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--primary-brown);">
+            <div class="total-cost" style="font-size: 1.2rem;">
+                💰 Custo Total Estimado (Ingredientes): <strong>R$ {{ "%.2f"|format(custo_total) }}</strong>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state-icon">🥣</div>
+            <h3>Nenhum ingrediente adicionado ainda</h3>
+            <p>Comece a adicionar ingredientes usando o formulário acima.</p>
+            <p>Se um ingrediente não estiver cadastrado, o sistema irá pedir-lhe para informar o preço da embalagem.</p>
+        </div>
+    </div>
+{% endif %}
+
+<div class="nav-buttons">
+    <a href="{{ url_for('adicionar_custo_receita', receita_id=receita['id']) }}" class="btn btn-primary">
+        Adicionar Custos (Gás, Embalagens...) →
+    </a>
+    <a href="{{ url_for('ver_receita', receita_id=receita['id']) }}" class="btn btn-success">
+        ✅ Finalizar e Ver Resumo
+    </a>
+    <a href="{{ url_for('editar_receita', receita_id=receita['id']) }}" class="btn btn-secondary">
+        ✏️ Editar Nome da Receita
+    </a>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+        🏠 Voltar ao Início
+    </a>
+</div>
+
+<div class="tip">
+    <strong>Como funciona:</strong><br>
+    1. Digite o nome do ingrediente. Se não estiver cadastrado, será redirecionado para informar o preço.<br>
+    2. O sistema calcula automaticamente o custo proporcional de cada ingrediente.<br>
+    3. Clique em "Editar" ao lado de cada ingrediente para ajustar as quantidades.
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Foco automático no campo de ingrediente
+    document.getElementById('nome_ingrediente').focus();
+
+    // Converter para minúsculas automaticamente
+    document.getElementById('nome_ingrediente').addEventListener('input', function() {
+        this.value = this.value.toLowerCase();
+    });
+
+    // Preenchimento automático de unidade com base no ingrediente
+    document.getElementById('nome_ingrediente').addEventListener('blur', function() {
+        const ingrediente = this.value.toLowerCase();
+        const unidadeSelect = document.getElementById('unidade');
+
+        if (ingrediente.includes('farinha') || ingrediente.includes('açúcar') || ingrediente.includes('chocolate em pó')) {
+            unidadeSelect.value = 'g';
+        } else if (ingrediente.includes('leite') || ingrediente.includes('água') || ingrediente.includes('óleo')) {
+            unidadeSelect.value = 'ml';
+        } else if (ingrediente.includes('ovo')) {
+            unidadeSelect.value = 'unidade';
+        }
+    });
+</script>
+{% endblock %}

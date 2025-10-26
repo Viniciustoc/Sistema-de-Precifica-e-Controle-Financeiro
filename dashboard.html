@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}
+Dashboard Financeiro - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+Análise de Performance
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>📊 Dashboard Financeiro</h1>
+    <p>Análise dos últimos 90 dias.</p>
+</div>
+
+<!-- Cards de Métricas -->
+<div class="metric-grid">
+    <div class="metric-card">
+        <div class="metric-label">Receita Bruta Total</div>
+        <div class="metric-value">R$ {{ "%.2f"|format(total_vendas) }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Lucro Bruto (Receita - Custo Produtos)</div>
+        <div class="metric-value">R$ {{ "%.2f"|format(lucro_bruto_total) }}</div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-label">Despesas Totais</div>
+        <div class="metric-value">R$ {{ "%.2f"|format(gasto_total_mensal) }}</div>
+    </div>
+    <div class="metric-card" style="background: var(--primary-brown); color: white;">
+        <div class="metric-label" style="color: white;">Lucro Líquido (Lucro Bruto - Despesas)</div>
+        <div class="metric-value">R$ {{ "%.2f"|format(lucro_liquido) }}</div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="card">
+    {{ graph_evolucao_lucro_html|safe }}
+</div>
+<div class="form-row" style="align-items: flex-start;">
+    <div class="card" style="flex: 1;">
+        {{ graph_top_vendas_html|safe }}
+    </div>
+    <div class="card" style="flex: 1;">
+        {{ graph_top_lucro_html|safe }}
+    </div>
+</div>
+{% endblock %}

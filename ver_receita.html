@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {{ receita['nome'] }} - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+    Detalhes da Receita
+{% endblock %}
+
+{% block content %}
+<div class="recipe-header">
+    <div class="recipe-title">
+        <h1>🧁 {{ receita['nome'] }}</h1>
+        {% if receita['descricao'] %}
+            <p style="font-style: italic; color: var(--text-light); margin-top: 0.5rem;">{{ receita['descricao'] }}</p>
+        {% endif %}
+    </div>
+
+    <div class="recipe-meta">
+        <div class="meta-item">
+            <span class="meta-label">Custo Ingredientes:</span>
+            <span class="meta-value">R$ {{ "%.2f"|format(custo_ingredientes) }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Custo Adicional:</span>
+            <span class="meta-value">R$ {{ "%.2f"|format(custo_adicional_total) }}</span>
+        </div>
+        <div class="meta-item cost-total" style="border: none; font-size: 1.1rem;">
+            <span class="meta-label">Custo Total:</span>
+            <span class="meta-value">R$ {{ "%.2f"|format(custo_total) }}</span>
+        </div>
+    </div>
+</div>
+
+{% if ingredientes %}
+    <div class="card">
+        <h2>📋 Ingredientes e Custos</h2>
+
+        <div class="ingredient-grid">
+            <div class="ingredient-header">Ingrediente</div>
+            <div class="ingredient-header" style="text-align: center;">Quantidade</div>
+            <div class="ingredient-header" style="text-align: right;">Custo</div>
+
+            {% for ingr in ingredientes %}
+                <div class="ingredient-row" data-label="{{ ingr.nome }}">
+                    <div class="ingredient-cell ingredient-name">
+                        {{ ingr['nome'] }}
+                    </div>
+                    <div class="ingredient-cell ingredient-quantity">
+                        {{ ingr['quantidade'] }} {{ ingr['unidade'] }}
+                    </div>
+                    <div class="ingredient-cell ingredient-cost">
+                        R$ {{ "%.2f"|format(ingr['custo']) }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="cost-total" style="margin-top: 1rem; text-align: right;">
+            <span>Subtotal Ingredientes:</span>
+            <strong>R$ {{ "%.2f"|format(custo_ingredientes) }}</strong>
+        </div>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state-icon">🥣</div>
+            <h3>Receita sem ingredientes</h3>
+            <p>Adicione ingredientes para calcular o custo e sugerir preços de venda.</p>
+        </div>
+    </div>
+{% endif %}
+
+{% if custos_adicionais %}
+    <div class="card">
+        <h2>📦 Custos Adicionais</h2>
+        <ul class="item-list">
+            {% for custo in custos_adicionais %}
+                <li class="item-list-item">
+                    <div class="item-info">
+                        <span class="item-name">{{ custo['nome'] }}</span>
+                        <span class="item-details">- {{ custo['quantidade_utilizada'] }} {{ custo['unidade_medida'] }}</span>
+                    </div>
+                    <div class="item-cost">
+                        {% if custo['vida_util'] and custo['vida_util'] > 0 %}
+                            R$ {{ "%.2f"|format(custo['custo_unitario'] / custo['vida_util'] * custo['quantidade_utilizada']) }}
+                        {% else %}
+                            R$ {{ "%.2f"|format(custo['custo_unitario'] * custo['quantidade_utilizada']) }}
+                        {% endif %}
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+        <div class="cost-total" style="margin-top: 1rem; text-align: right;">
+            <span>Subtotal Adicionais:</span>
+            <strong>R$ {{ "%.2f"|format(custo_adicional_total) }}</strong>
+        </div>
+    </div>
+{% endif %}
+
+<div class="card">
+    <h2>💰 Sugestões de Preço de Venda</h2>
+    <p style="text-align: center; color: var(--text-light);">Baseado no Custo Total de R$ {{ "%.2f"|format(custo_total) }}</p>
+    <div class="pricing-suggestions">
+        <div class="pricing-card" title="Clique para copiar" onclick="copiarPreco(3)">
+            <div class="pricing-multiplier">3× o custo</div>
+            <div class="pricing-value">R$ {{ "%.2f"|format(custo_total * 3) }}</div>
+            <div class="pricing-description">Margem básica</div>
+        </div>
+        <div class="pricing-card" title="Clique para copiar" onclick="copiarPreco(3.5)" style="border-color: var(--primary-brown);">
+            <div class="pricing-multiplier">3.5× o custo</div>
+            <div class="pricing-value">R$ {{ "%.2f"|format(custo_total * 3.5) }}</div>
+            <div class="pricing-description">Recomendado</div>
+        </div>
+        <div class="pricing-card" title="Clique para copiar" onclick="copiarPreco(4)">
+            <div class="pricing-multiplier">4× o custo</div>
+            <div class="pricing-value">R$ {{ "%.2f"|format(custo_total * 4) }}</div>
+            <div class="pricing-description">Premium</div>
+        </div>
+    </div>
+</div>
+
+<div class="nav-buttons">
+    <a href="{{ url_for('adicionar_ingredientes', receita_id=receita['id']) }}" class="btn btn-primary">
+        🥄 Gerir Ingredientes
+    </a>
+    <a href="{{ url_for('adicionar_custo_receita', receita_id=receita['id']) }}" class="btn btn-primary">
+        📦 Gerir Custos Adicionais
+    </a>
+    <a href="{{ url_for('editar_receita', receita_id=receita['id']) }}" class="btn btn-secondary">
+        ✏️ Editar Nome/Descrição
+    </a>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+        🏠 Voltar ao Início
+    </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function copiarPreco(multiplicador) {
+        const custoTotal = {{ custo_total|default(0) }};
+        const preco = custoTotal * multiplicador;
+        const texto = `Sugestão de preço (${multiplicador}x): R$ ${preco.toFixed(2)}`;
+
+        navigator.clipboard.writeText(texto).then(() => {
+            alert('Preço copiado para a área de transferência!');
+        }).catch(err => {
+            console.error('Erro ao copiar:', err);
+            alert('Não foi possível copiar o preço.');
+        });
+    }
+</script>
+{% endblock %}

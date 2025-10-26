@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}
+Lançamentos Financeiros - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+Controlo Financeiro
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Lançamentos Manuais</h1>
+    <p>Registe aqui as suas vendas diárias e as suas despesas gerais.</p>
+</div>
+
+<div class="form-row" style="align-items: flex-start;">
+    <!-- Formulário de Venda -->
+    <div class="card" style="flex: 2;">
+        <h2>🛒 Registar Nova Venda</h2>
+        <form id="form-venda" method="POST">
+            <input type="hidden" name="form_type" value="venda">
+            <input type="hidden" name="venda_itens_json" id="venda_itens_json">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="data_venda">Data da Venda:</label>
+                    <input type="date" id="data_venda" name="data_venda" required>
+                </div>
+                <div class="form-group">
+                    <label for="metodo_pagamento">Método de Pagamento:</label>
+                    <select id="metodo_pagamento" name="metodo_pagamento">
+                        <option value="Cartão">Cartão</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Pix">Pix</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+            </div>
+
+            <hr>
+            <h4>Itens da Venda</h4>
+            <div id="itens-container">
+                <!-- Itens adicionados dinamicamente aqui -->
+            </div>
+
+            <div class="form-row" style="align-items: flex-end; border-top: 1px solid #eee; padding-top: 1rem; margin-top: 1rem;">
+                <div class="form-group" style="flex: 3;">
+                    <label for="produto_select">Produto:</label>
+                    <select id="produto_select">
+                        <option value="">Selecione um produto</option>
+                        {% for produto in produtos %}
+                        <option value="{{ produto['id'] }}"
+                                data-custo="{{ calcular_custo_produto(produto['id']) | round(2) }}"
+                                data-nome="{{ produto['nome'] }}"
+                                data-preco-venda="{{ produto['preco_venda'] }}">
+                            {{ produto['nome'] }} (R$ {{ "%.2f"|format(produto['preco_venda']) }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="item_quantidade">Qtd:</label>
+                    <input type="number" id="item_quantidade" min="1" value="1">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="item_preco_venda">Preço Unit. (R$):</label>
+                    <input type="number" id="item_preco_venda" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <button type="button" id="add-item-btn" class="btn btn-secondary">Adicionar</button>
+                </div>
+            </div>
+            <hr>
+             <div class="total-cost" style="margin: 1rem 0;">
+                Total da Venda: <strong id="total-venda">R$ 0.00</strong>
+            </div>
+
+            <div class="nav-buttons">
+                <button type="submit" class="btn btn-primary">Registar Venda</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Formulário de Despesa -->
+    <div class="card" style="flex: 1;">
+        <h2>💸 Registar Nova Despesa</h2>
+        <form method="POST">
+            <input type="hidden" name="form_type" value="despesa">
+            <div class="form-group">
+                <label for="data_despesa">Data da Despesa:</label>
+                <input type="date" id="data_despesa" name="data_despesa" required>
+            </div>
+            <div class="form-group">
+                <label for="descricao">Descrição:</label>
+                <input type="text" id="descricao" name="descricao" placeholder="Ex: Aluguer, Marketing" required>
+            </div>
+            <div class="form-group">
+                <label for="valor">Valor (R$):</label>
+                <input type="number" id="valor" name="valor" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+                <label for="categoria">Categoria:</label>
+                <select id="categoria" name="categoria">
+                    <option value="Fixa">Fixa</option>
+                    <option value="Variável">Variável</option>
+                    <option value="Ingredientes">Ingredientes</option>
+                    <option value="Outra">Outra</option>
+                </select>
+            </div>
+            <div class="nav-buttons">
+                <button type="submit" class="btn btn-primary">Registar Despesa</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Set default date to today
+    document.getElementById('data_venda').valueAsDate = new Date();
+    document.getElementById('data_despesa').valueAsDate = new Date();
+
+    const vendaItens = [];
+    const addItemBtn = document.getElementById('add-item-btn');
+    const itensContainer = document.getElementById('itens-container');
+    const totalVendaEl = document.getElementById('total-venda');
+    const formVenda = document.getElementById('form-venda');
+    const vendaItensJsonInput = document.getElementById('venda_itens_json');
+    const produtoSelect = document.getElementById('produto_select');
+    const precoVendaInput = document.getElementById('item_preco_venda');
+
+    produtoSelect.addEventListener('change', () => {
+        const selectedOption = produtoSelect.options[produtoSelect.selectedIndex];
+        if (selectedOption.value) {
+            precoVendaInput.value = selectedOption.dataset.precoVenda;
+        } else {
+            precoVendaInput.value = '';
+        }
+    });
+
+    function renderItens() {
+        itensContainer.innerHTML = '';
+        let totalVenda = 0;
+        vendaItens.forEach((item, index) => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'item-list-item';
+            itemEl.innerHTML = `
+                <div class="item-info">
+                    <span class="item-name">${item.nome}</span>
+                    <div class="item-details">${item.quantidade} x R$ ${item.preco_venda.toFixed(2)}</div>
+                </div>
+                <button type="button" class="btn btn-small btn-danger" onclick="removerItem(${index})">🗑️</button>
+            `;
+            itensContainer.appendChild(itemEl);
+            totalVenda += item.quantidade * item.preco_venda;
+        });
+        totalVendaEl.textContent = `R$ ${totalVenda.toFixed(2)}`;
+        vendaItensJsonInput.value = JSON.stringify(vendaItens);
+    }
+
+    function removerItem(index) {
+        vendaItens.splice(index, 1);
+        renderItens();
+    }
+
+    addItemBtn.addEventListener('click', () => {
+        const selectedOption = produtoSelect.options[produtoSelect.selectedIndex];
+        const produtoId = parseInt(selectedOption.value);
+        const nome = selectedOption.dataset.nome;
+        const custoProducao = parseFloat(selectedOption.dataset.custo);
+        const quantidade = parseInt(document.getElementById('item_quantidade').value);
+        const precoVenda = parseFloat(precoVendaInput.value);
+
+        if (!produtoId || !quantidade || isNaN(precoVenda)) {
+            alert('Por favor, preencha todos os campos do item.');
+            return;
+        }
+
+        vendaItens.push({
+            produto_id: produtoId,
+            nome: nome,
+            custo_producao: custoProducao,
+            quantidade: quantidade,
+            preco_venda: precoVenda
+        });
+
+        renderItens();
+        // Reset fields
+        produtoSelect.value = '';
+        document.getElementById('item_quantidade').value = 1;
+        precoVendaInput.value = '';
+    });
+</script>
+{% endblock %}
