@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}
+Gerir Ingredientes - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+Seu catálogo de ingredientes e custos
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <h1>🥣 Catálogo de Ingredientes</h1>
+        <a href="{{ url_for('novo_ingrediente') }}" class="btn btn-primary">➕ Novo Ingrediente</a>
+    </div>
+
+    <div class="tip" style="border-left-color: var(--primary-brown);">
+        Aqui você gerencia seu estoque de ingredientes. Estes são os custos base usados em todas as suas receitas.
+    </div>
+
+    {% if ingredientes %}
+    <ul class="item-list">
+        {% for ingrediente in ingredientes %}
+        <li class="item-list-item">
+            <div class="item-info">
+                <span class="item-name">{{ ingrediente['nome'] | title }}</span>
+                <div class="item-details">
+                    Preço: R$ {{ "%.2f"|format(ingrediente['preco_embalagem']) }}
+                </div>
+                <div class="item-details">
+                    Embalagem: {{ ingrediente['quant_embalagem'] }}g (ou ml)
+                </div>
+                <div class="item-details" style="color: var(--success-green); font-weight: bold;">
+                    Custo/g: R$ {{ "%.4f"|format(ingrediente['preco_embalagem'] / ingrediente['quant_embalagem']) }}
+                </div>
+            </div>
+
+            <div class="item-actions">
+                <form action="{{ url_for('excluir_ingrediente_db', ingrediente_id=ingrediente['id']) }}" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-small btn-danger"
+                            onclick="return confirm('Tem a certeza que deseja excluir o ingrediente ' + {{ ingrediente['nome'] | tojson }} + ' do catálogo?')">
+                        🗑️ Excluir
+                    </button>
+                </form>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">
+        <p>Nenhum ingrediente cadastrado no catálogo. Adicione seu primeiro ingrediente!</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

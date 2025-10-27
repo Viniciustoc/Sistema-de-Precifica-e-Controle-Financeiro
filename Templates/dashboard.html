@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}
+Dashboard Financeiro - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+Análise de Performance
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+    <form method="GET" action="{{ url_for('dashboard_financeiro') }}">
+        <div class="form-row" style="align-items: flex-end;">
+            <div class="form-group" style="flex: 1;">
+                <label for="start_date">Data Início:</label>
+                <input type="date" id="start_date" name="start_date" value="{{ data_inicio }}">
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label for="end_date">Data Fim:</label>
+                <input type="date" id="end_date" name="end_date" value="{{ data_fim }}">
+            </div>
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="metric-grid">
+    <div class="metric-card">
+        <div class="metric-label">Valor Total Vendido</div>
+        <div class="metric-value">R$ {{ "%.2f"|format(kpis.total_vendido) }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Quantidade Total Vendida</div>
+        <div class="metric-value">{{ kpis.total_quantidade }}</div>
+    </div>
+
+    <div class="metric-card" style="border-left-color: var(--error-red);">
+        <div class="metric-label">Valor Total Gasto (Despesas)</div>
+        <div class="metric-value">R$ {{ "%.2f"|format(kpis.total_gasto) }}</div>
+    </div>
+
+    <div class="metric-card" style="border-left-color: {% if kpis.lucro_liquido >= 0 %}var(--success-green){% else %}var(--error-red){% endif %};">
+        <div class="metric-label">Valor Lucro Líquido</div>
+        <div class="metric-value">R$ {{ "%.2f"|format(kpis.lucro_liquido) }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Cresc. vs Semana Anterior (Lucro)</div>
+        <div class="metric-value" style="color: {% if cresc_semana is none %}#777{% elif cresc_semana >= 0 %}var(--success-green){% else %}var(--error-red){% endif %};">
+            {% if cresc_semana is none %}
+                N/A
+            {% else %}
+                {{ "%.1f"|format(cresc_semana * 100) }}%
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Cresc. vs Mês Anterior (Lucro)</div>
+        <div class="metric-value" style="color: {% if cresc_mes is none %}#777{% elif cresc_mes >= 0 %}var(--success-green){% else %}var(--error-red){% endif %};">
+            {% if cresc_mes is none %}
+                N/A
+            {% else %}
+                {{ "%.1f"|format(cresc_mes * 100) }}%
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Gráficos de Evolução</h2>
+    <div class="chart-container">
+        {{ graph_evolucao_lucro_venda_html|safe }}
+    </div>
+    <div class="chart-container">
+        {{ graph_evolucao_gastos_html|safe }}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Análise de Produtos (Top/Bottom 5)</h2>
+    <div class="chart-container">
+        {{ graph_top_bottom_vendido_html|safe }}
+    </div>
+    <div class="chart-container">
+        {{ graph_top_bottom_lucro_html|safe }}
+    </div>
+    <div class="chart-container">
+        {{ graph_top_bottom_qtd_html|safe }}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Criar Nova Receita - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+    Criar Nova Receita
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>✨ Criar Nova Receita</h1>
+
+    <form method="POST" action="{{ url_for('criar_receita') }}" onsubmit="return validarFormulario()">
+        <div class="form-group">
+            <label for="nome_receita">Nome da Receita:</label>
+            <input type="text"
+                   name="nome_receita"
+                   id="nome_receita"
+                   value="{{ nome_receita or '' }}"
+                   placeholder="Ex: Brigadeiro Tradicional, Beijinho de Coco..."
+                   required>
+            <div id="nome_error" class="error-message">O nome não pode estar vazio</div>
+        </div>
+
+        <div class="form-group">
+            <label for="descricao">Descrição (opcional):</label>
+            <textarea name="descricao"
+                      id="descricao"
+                      placeholder="Descreva a sua receita...">{{ descricao or '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="rendimento">Rendimento (em unidades):</label>
+            <input type="number"
+                   name="rendimento"
+                   id="rendimento"
+                   value="1"
+                   min="1"
+                   step="1"
+                   required>
+            <small class="form-help-text" style="text-align: left; margin-top: 5px;">
+                Quantos produtos vendáveis (ex: cookies, brigadeiros) esta receita produz?
+            </small>
+        </div>
+        <div class="nav-buttons">
+            <button type="submit" class="btn btn-primary">
+                Criar Receita e Adicionar Ingredientes →
+            </button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                ← Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+
+<div class="tip">
+    <strong>Dica:</strong> Após criar a receita, será redirecionado para a página de adição de ingredientes, onde o sistema calculará automaticamente o custo total!
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function validarFormulario() {
+        const nomeInput = document.getElementById('nome_receita');
+        const nome = nomeInput.value.trim();
+        const errorElement = document.getElementById('nome_error');
+
+        // Adiciona validação para o novo campo rendimento
+        const rendimentoInput = document.getElementById('rendimento');
+        const rendimento = rendimentoInput.value;
+
+        if (nome === '') {
+            errorElement.classList.add('show');
+            nomeInput.classList.add('error');
+            nomeInput.focus();
+            return false;
+        }
+
+        // Valida se o rendimento é um número válido e maior que 0
+        if (isNaN(rendimento) || parseFloat(rendimento) <= 0) {
+            alert('O rendimento deve ser um número maior que 0.');
+            rendimentoInput.focus();
+            return false;
+        }
+
+        errorElement.classList.remove('show');
+        nomeInput.classList.remove('error');
+        return true;
+    }
+
+    // Remover erro quando o utilizador começar a digitar
+    document.getElementById('nome_receita').addEventListener('input', function() {
+        if (this.value.trim() !== '') {
+            document.getElementById('nome_error').classList.remove('show');
+            this.classList.remove('error');
+        }
+    });
+</script>
+{% endblock %}

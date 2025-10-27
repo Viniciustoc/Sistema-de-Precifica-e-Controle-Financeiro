@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Confirmar Reset - Julli's Brigadeiros{% endblock %}
+
+{% block subtitle %}Ação Destrutiva{% endblock %}
+
+{% block content %}
+<div class="card" style="border-left: 5px solid var(--danger-red);">
+    <h1 style="color: var(--danger-red);">⚠️ Atenção: Resetar Banco de Dados</h1>
+    <p>Esta ação é <strong>irreversível</strong> e apagará permanentemente todos os seus dados cadastrados, incluindo:</p>
+    <ul>
+        <li>Todos os Ingredientes</li>
+        <li>Todas as Receitas</li>
+        <li>Todos os Produtos</li>
+        <li>Todos os Lançamentos de Vendas e Despesas</li>
+    </ul>
+    <p>Para confirmar esta ação, por favor, digite a senha de administrador.</p>
+
+    <form method="POST" action="{{ url_for('confirmar_reset') }}" style="margin-top: 2rem;">
+        <div class="form-group">
+            <label for="password">Senha de Administrador:</label>
+            <input type="password" name="password" id="password" required>
+        </div>
+        
+        <div class="nav-buttons" style="margin-top: 1rem;">
+            <button type="submit" class="btn btn-danger">
+                🗑️ Confirmar e Apagar Tudo
+            </button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                ← Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

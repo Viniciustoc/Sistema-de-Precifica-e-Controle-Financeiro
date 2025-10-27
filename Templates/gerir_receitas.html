@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}
+Gerir Receitas - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+O seu livro de receitas para cálculo de custos
+{% endblock %}
+-
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <h1>🧁 Livro de Receitas</h1>
+        <a href="{{ url_for('criar_receita') }}" class="btn btn-primary">➕ Nova Receita</a>
+    </div>
+
+    <div class="tip" style="border-left-color: var(--primary-brown);">
+        As receitas são a base para calcular os custos. Crie aqui as suas massas e recheios, e depois use-os para montar os seus produtos vendáveis.
+    </div>
+
+    {% if receitas %}
+    <ul class="item-list">
+        {% for receita in receitas %}
+        <li class="item-list-item">
+            <div class="item-info">
+                <span class="item-name">{{ receita['nome'] }}</span>
+                <div class="item-details">Rendimento: {{ receita['rendimento'] }} unidades</div>
+                <div class="item-details" style="color: var(--success-green);">Custo Total da Receita: R$ {{ "%.2f"|format(calcular_custo_total_receita(receita['id'])) }}</div>
+                <div class="item-details" style="color: var(--success-green); font-weight: bold;">Custo por Unidade: R$ {{ "%.2f"|format(calcular_custo_total_receita(receita['id']) / receita['rendimento']) }}</div>
+            </div>
+            <div class="item-actions">
+                <a href="{{ url_for('adicionar_ingredientes', receita_id=receita['id']) }}" class="btn btn-small btn-secondary">Ingredientes</a>
+                <a href="{{ url_for('editar_receita', receita_id=receita['id']) }}" class="btn btn-small btn-secondary">✏️ Editar</a>
+                <form action="{{ url_for('excluir_receita', receita_id=receita['id']) }}" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-small btn-danger" ... onclick="return confirm('Tem a certeza que deseja excluir a receita ' + {{ receita['nome'] | tojson }} + '?')">🗑️ Excluir</button>
+                </form>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty-state">
+        <p>Nenhuma receita cadastrada. Crie a sua primeira base de custo!</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

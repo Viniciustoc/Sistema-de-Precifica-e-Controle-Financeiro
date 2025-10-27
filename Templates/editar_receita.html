@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Editar Receita - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+    A editar: {{ receita['nome'] }}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>✏️ Editar Receita</h1>
+
+    <form method="POST" onsubmit="return validarFormulario()">
+        <div class="form-group">
+            <label for="nome_receita">Nome da Receita:</label>
+            <input type="text"
+                   name="nome_receita"
+                   id="nome_receita"
+                   value="{{ receita['nome'] }}"
+                   required>
+        </div>
+
+        <div class="form-group">
+            <label for="descricao">Descrição:</label>
+            <textarea name="descricao"
+                      id="descricao">{{ receita['descricao'] or '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="rendimento">Rendimento (em unidades):</label>
+            <input type="number"
+                   name="rendimento"
+                   id="rendimento"
+                   value="{{ receita['rendimento'] }}"
+                   min="1"
+                   step="1"
+                   required>
+            <small class="form-help-text" style="text-align: left; margin-top: 5px;">
+                Quantos produtos vendáveis (ex: cookies, brigadeiros) esta receita produz?
+            </small>
+        </div>
+        <div class="nav-buttons">
+            <button type="submit" class="btn btn-primary">
+                💾 Salvar Alterações
+            </button>
+            <a href="{{ url_for('ver_receita', receita_id=receita['id']) }}" class="btn btn-secondary">
+                ← Cancelar
+            </a>
+        </div>
+    </form>
+
+    <hr style="margin: 2rem 0; border-top: 1px solid #eee;">
+
+    <div class="danger-zone">
+        <h2>⚠️ Área de Perigo</h2>
+        <p>A exclusão de uma receita é permanente e não pode ser desfeita.</p>
+        <form method="POST" action="{{ url_for('excluir_receita', receita_id=receita['id']) }}"
+              onsubmit="return confirm('Tem a certeza de que deseja excluir esta receita? Esta ação não pode ser desfeita.');">
+            <button type="submit" class="btn btn-danger">
+                🗑️ Excluir Receita Permanentemente
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function validarFormulario() {
+        // Valida se o rendimento é um número válido e maior que 0
+        const rendimentoInput = document.getElementById('rendimento');
+        const rendimento = rendimentoInput.value;
+
+        if (isNaN(rendimento) || parseFloat(rendimento) <= 0) {
+            alert('O rendimento deve ser um número maior que 0.');
+            rendimentoInput.focus();
+            return false;
+        }
+        return true;
+    }
+</script>
+{% endblock %}

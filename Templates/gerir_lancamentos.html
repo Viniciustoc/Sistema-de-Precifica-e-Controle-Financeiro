@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}
+Gerir Lançamentos - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+Gestão de Vendas e Despesas
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Gerir Lançamentos</h1>
+    <p>Aqui você pode visualizar e excluir vendas e despesas já registradas.</p>
+</div>
+
+<div class="form-row" style="align-items: flex-start; margin-top: 2rem;">
+
+    <div class="card" style="flex: 2;">
+        <h2>🛒 Vendas Recentes (Últimas 20)</h2>
+        {% if vendas %}
+            <ul class="item-list">
+            {% for venda in vendas %}
+                <li class="item-list-item">
+                    <div class="item-info">
+                        <span class="item-name">{{ venda['data'] }} - Total: R$ {{ "%.2f"|format(venda['total_venda']) }}</span>
+                        <div class="item-details">ID: {{ venda['id'] }} | Pag: {{ venda['metodo_pagamento'] }}</div>
+                    </div>
+                    <div class="item-actions">
+                        <form action="{{ url_for('excluir_venda', venda_id=venda['id']) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir esta VENDA?');">
+                            <button type="submit" class="btn btn-small btn-danger">🗑️ Excluir</button>
+                        </form>
+                    </div>
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>Nenhuma venda recente.</p>
+        {% endif %}
+    </div>
+
+    <div class="card" style="flex: 1;">
+        <h2>💸 Despesas Recentes (Últimas 20)</h2>
+        {% if despesas %}
+            <ul class="item-list">
+            {% for despesa in despesas %}
+                <li class="item-list-item">
+                    <div class="item-info">
+                        <span class="item-name">{{ despesa['data'] }} - R$ {{ "%.2f"|format(despesa['valor']) }}</span>
+                        <div class="item-details">{{ despesa['descricao'] }} | {{ despesa['categoria'] }}</div>
+                    </div>
+                    <div class="item-actions">
+                        <form action="{{ url_for('excluir_despesa', despesa_id=despesa['id']) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir esta DESPESA?');">
+                            <button type="submit" class="btn btn-small btn-danger">🗑️ Excluir</button>
+                        </form>
+                    </div>
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>Nenhuma despesa recente.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}
+Debug do Banco de Dados - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+Estado Atual de Todas as Tabelas
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>🕵️ Debug do Banco de Dados</h1>
+    <p>Mostrando {{ tables|length }} tabelas encontradas no arquivo <strong>{{ DATABASE }}</strong>.</p>
+</div>
+
+{% for table_name in tables %}
+<div class="card">
+    <h2>Seção: {{ table_name }}</h2>
+
+    {% set rows = db_data[table_name] %}
+
+    {% if rows %}
+        <div style="overflow-x: auto;">
+
+            <table class="debug-table">
+                <thead>
+                    <tr>
+                        {% for key in rows[0].keys() %}
+                            <th>{{ key }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        {% for value in row %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p style="text-align: right; font-size: 0.9rem; color: #777;">
+                Total: {{ rows|length }} registros.
+            </p>
+        </div>
+    {% else %}
+        <p><i>(Tabela vazia)</i></p>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

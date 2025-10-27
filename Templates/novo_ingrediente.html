@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+/* Estilos à prova de falhas para esta página */
+
+/* 1. O contêiner principal */
+.form-help-text {
+    display: block !important;
+    font-size: 0.85rem !important;
+    color: #555 !important;
+    margin-top: 10px !important;
+    line-height: 1.4 !important;
+    text-align: left !important;
+}
+
+/* 2. O contêiner da lista (o antigo UL) */
+.help-item-list {
+    margin-top: 8px !important;
+    padding-left: 0 !important; /* Remove qualquer padding */
+}
+
+/* 3. Cada item da lista (o antigo LI) */
+.help-item {
+    margin-bottom: 5px !important;
+    display: flex !important; /* ESSENCIAL: Alinha a bolinha e o texto */
+    align-items: flex-start !important; /* Alinha pelo topo */
+}
+
+/* 4. A bolinha (o <span>) */
+.help-bullet {
+    margin-right: 8px !important; /* Espaço entre a bolinha e o texto */
+    line-height: 1.4 !important; /* Garante alinhamento vertical com o texto */
+    font-weight: bold !important;
+    color: #333 !important;
+}
+
+/* 5. O negrito (<b>) */
+.help-text b {
+    color: #333 !important;
+    font-weight: 600 !important;
+    margin-right: 4px !important; /* Espaço após o "Líquidos:" */
+}
+</style>
+{% endblock %}
+{% block title %}
+    Cadastrar Novo Ingrediente - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+    Cadastrar Novo Ingrediente
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>📦 Cadastrar Novo Ingrediente</h1>
+
+    <div class="tip">
+        <strong>Não sabe a densidade?</strong><br>
+        • <strong>Líquidos</strong> (leite, água, óleo): use <strong>1.0</strong><br>
+        • <strong>Farinhas e açúcares</strong>: use <strong>0.7</strong><br>
+        • <strong>Manteiga/Gorduras</strong>: use <strong>0.9</strong><br>
+        • <strong>Na dúvida</strong>: use <strong>1.0</strong>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="receita_id" value="{{ receita_id or '' }}">
+        <input type="hidden" name="quantidade_original" value="{{ quantidade_original or '' }}">
+        <input type="hidden" name="unidade_original" value="{{ unidade_original or '' }}">
+
+        <div class="form-group">
+            <label for="nome">Nome do Ingrediente:</label>
+            <input type="text" 
+                   name="nome" 
+                   id="nome"
+                   value="{{ nome or '' }}" 
+                   placeholder="Ex: leite condensado"
+                   required>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="preco_embalagem">Preço da embalagem (R$):</label>
+                <input type="number" 
+                       step="0.01" 
+                       name="preco_embalagem" 
+                       id="preco_embalagem"
+                       placeholder="Ex: 5.50"
+                       required>
+            </div>
+
+            <div class="form-group">
+                 <label for="quant_embalagem">Quantidade Total da Embalagem (em Gramas):</label>
+                 <input type="number" step="any" name="quant_embalagem" id="quant_embalagem" required
+                        placeholder="Ex: 1000 para 1kg de farinha">
+
+                 <small class="form-help-text">
+                     O sistema calcula custos com base no peso (g).
+
+                     <div class="help-item-list">
+                         <div class="help-item">
+                             <span class="help-bullet">•</span>
+                             <div class="help-text">
+                                 <b>Líquidos:</b> Converta de ml para g (Ex: 1000ml de leite * 1.03 densidade = 1030g).
+                             </div>
+                         </div>
+                         <div class="help-item">
+                             <span class="help-bullet">•</span>
+                             <div class="help-text">
+                                 <b>Unidades:</b> Converta de 'unidade' para g (Ex: 12 ovos * 50g/ovo = 600g).
+                             </div>
+                         </div>
+                         <div class="help-item">
+                             <span class="help-bullet">•</span>
+                             <div class="help-text">
+                                 <b>Exemplo:</b> Caso sua receita utilize 2 ovos, considere cada ovo como 50g, nesse exemplo de 2 ovos, preencha com 100g.
+                             </div>
+                         </div>
+                     </div>
+                 </small>
+             </div>
+        </div>
+
+        <div class="form-group">
+            <label for="densidade">Densidade (g/ml):</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <input type="number" 
+                       step="0.01" 
+                       name="densidade" 
+                       id="densidade"
+                       value="1.0" 
+                       style="flex: 1; min-width: 120px;"
+                       required>
+                <button type="button" class="btn btn-secondary" onclick="setDensidade(1.0)">
+                    💧 Líquido
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="setDensidade(0.7)">
+                    🌾 Seco
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="setDensidade(0.9)">
+                    🧈 Gordura
+                </button>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <button type="submit" class="btn btn-primary">
+                💾 Salvar e Adicionar à Receita
+            </button>
+            {% if receita_id %}
+                <a href="{{ url_for('adicionar_ingredientes', receita_id=receita_id) }}" class="btn btn-secondary">
+                    ← Voltar
+                </a>
+            {% else %}
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                    🏠 Voltar ao Início
+                </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="tip">
+    <strong>Exemplo prático:</strong><br>
+    Se comprou uma lata de leite condensado por R$ 5,50 e ela tem 395g, deve preencher:<br>
+    • <strong>Preço:</strong> 5.50<br>
+    • <strong>Quantidade:</strong> 395<br>
+    • <strong>Densidade:</strong> 1.0 (é um líquido denso)
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function setDensidade(valor) {
+        document.getElementById('densidade').value = valor;
+    }
+
+    // Foco automático no campo de preço se o nome já estiver preenchido
+    window.onload = function() {
+        const nomeField = document.getElementById('nome');
+        if (nomeField.value.trim() !== '') {
+            document.getElementById('preco_embalagem').focus();
+        } else {
+            nomeField.focus();
+        }
+    };
+</script>
+{% endblock %}

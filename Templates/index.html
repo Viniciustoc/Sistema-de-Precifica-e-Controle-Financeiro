@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Julli's Brigadeiros - Início
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Painel Principal</h1>
+
+    <div class="nav-buttons">
+        <a href="{{ url_for('gerir_receitas') }}" class="btn btn-primary">
+            🧁 Gerir Receitas
+        </a>
+        <a href="{{ url_for('gerir_produtos') }}" class="btn btn-primary" style="background-color: #A0673F;">
+            🛍️ Gerir Produtos
+        </a>
+        <a href="{{ url_for('gerir_ingredientes') }}" class="btn btn-primary" style="background-color: #8B4513;">
+            🌾 Gerir Ingredientes
+        </a>
+        <a href="{{ url_for('custos_adicionais') }}" class="btn btn-primary" style="background-color: #6B4226;">
+            📦 Custos Adicionais
+        </a>
+        <a href="{{ url_for('gerir_lancamentos') }}" class="btn btn-secondary">
+            🗑Gerir Lançamentos
+        </a>
+    </div>
+
+    <hr style="margin: 2rem 0;">
+
+    <h2>Financeiro</h2>
+    <div class="nav-buttons">
+        <a href="{{ url_for('lancamentos_financeiros') }}" class="btn btn-primary">
+            💸 Lançamentos (Vendas/Despesas)
+        </a>
+        <a href="{{ url_for('dashboard_financeiro') }}" class="btn btn-success">
+            📊 Ver Dashboard
+        </a>
+    </div>
+
+</div>
+
+<div class="tip">
+    <strong>Fluxo de Trabalho Recomendado:</strong><br>
+    1. <strong>Gerir Receitas:</strong> Crie as suas bases de custo aqui.<br>
+    2. <strong>Gerir Produtos:</strong> Defina os seus itens de venda com base nas receitas.<br>
+    3. <strong>Lançamentos:</strong> Registe as suas vendas e despesas diárias.<br>
+    4. <strong>Dashboard:</strong> Analise a performance do seu negócio!
+</div>
+{% endblock %}

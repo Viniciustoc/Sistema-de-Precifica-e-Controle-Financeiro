@@ -12,6 +12,7 @@ import json
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "uma-chave-secreta-padrao-para-desenvolvimento")
 DATABASE = "doceria.db"
+ADMIN_PASSWORD = "@Vinicius13"
 
 
 # Passo 2: Gerenciamento da Conexão com o DataBase
@@ -60,15 +61,13 @@ def init_db():
 
         # Tabelas Financeiras
         cursor.execute('''CREATE TABLE IF NOT EXISTS despesas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, descricao TEXT NOT NULL, valor REAL NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            descricao TEXT NOT NULL, 
+            valor REAL NOT NULL,
             data DATE NOT NULL, categoria TEXT )''')
+
         cursor.execute('''CREATE TABLE IF NOT EXISTS vendas (
             id INTEGER PRIMARY KEY AUTOINCREMENT, data DATE NOT NULL, total_venda REAL NOT NULL, metodo_pagamento TEXT )''')
-
-        # CORREÇÃO: Movido DROP TABLE para garantir que a estrutura seja sempre a mais recente ao recriar.
-        cursor.execute("DROP TABLE IF EXISTS venda_itens")
-        cursor.execute("DROP TABLE IF EXISTS produto_composicao")
-        cursor.execute("DROP TABLE IF EXISTS produtos")
 
         cursor.execute('''CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -296,6 +295,10 @@ def delete_custo_adicional_receita(custo_receita_id):
     cursor.execute('''DELETE FROM receita_custos_adicionais WHERE id = ?''', (custo_receita_id,))
     db.commit()
 
+def get_custo_adicional_receita_by_id(custo_receita_id):
+    cursor = get_db().cursor()
+    cursor.execute('SELECT * FROM receita_custos_adicionais WHERE id = ?', (custo_receita_id,))
+    return cursor.fetchone()
 
 # --- Seção de Produtos ---
 def get_produtos():
@@ -380,17 +383,40 @@ def calcular_custo_total_receita(receita_id):
 def calcular_custo_produto(produto_id):
     db = get_db()
     cursor = db.cursor()
+
+    # 1. Modificamos a query para buscar também o 'rendimento' da receita
     cursor.execute("""
-        SELECT pc.fracao_receita, r.id as receita_id
+        SELECT pc.fracao_receita, r.id as receita_id, r.rendimento
         FROM produto_composicao pc
         JOIN receitas r ON pc.receita_id = r.id
         WHERE pc.produto_id = ?
     """, (produto_id,))
+
     composicao = cursor.fetchall()
     custo_total_produto = 0
+
     for item in composicao:
+        # 2. Get cost of the ENTIRE batch (e.g., R$ 100)
         custo_total_da_receita = calcular_custo_total_receita(item['receita_id'])
-        custo_total_produto += custo_total_da_receita * item['fracao_receita']
+
+        # 3. Get the yield of the batch (e.g., 30 units)
+        rendimento_receita = item['rendimento']
+
+        # 4. (Segurança) Evita divisão por zero se o rendimento for 0 ou Nulo
+        if not rendimento_receita or rendimento_receita <= 0:
+            rendimento_receita = 1
+
+            # 5. ESTA É A MUDANÇA: Calcula o custo POR UNIDADE
+        # (e.g., R$ 100 / 30 units = R$ 3.33 per unit)
+        custo_unitario_da_receita = custo_total_da_receita / rendimento_receita
+
+        # 6. Get the quantity of units used in this product (e.g., 1 unit)
+        # (Assumindo que 'fracao_receita' é usado como 'quantidade')
+        quantidade_utilizada = item['fracao_receita']
+
+        # 7. Add to total cost (e.g., R$ 3.33 * 1 unit)
+        custo_total_produto += custo_unitario_da_receita * quantidade_utilizada
+
     return custo_total_produto
 
 
@@ -427,19 +453,234 @@ def add_venda(venda_itens, data, metodo_pagamento):
     db.commit()
 
 
-def get_dados_financeiros(periodo_dias=90):
+def calcular_crescimento(atual, anterior):
+    """Helper para calcular o crescimento percentual com segurança"""
+    if anterior is None or anterior == 0:
+        return None
+    try:
+        return (atual - anterior) / abs(anterior)
+    except TypeError:
+        return None
+
+
+def get_dados_financeiros():
+    """Busca TODOS os dados financeiros do banco sem filtro de data, os filtros sao aplicados no Pandas"""
     db = get_db()
-    data_inicio = (datetime.now() - timedelta(days=periodo_dias)).strftime('%Y-%m-%d')
-    vendas_df = pd.read_sql_query(f"SELECT * FROM vendas WHERE data >= ?", db, params=(data_inicio,))
+    # parse_dates conver a coluna data para datetime
+    vendas_df = pd.read_sql_query("SELECT * FROM vendas", db, parse_dates=['data'])
     venda_itens_df = pd.read_sql_query("SELECT * FROM venda_itens", db)
-    despesas_df = pd.read_sql_query(f"SELECT * FROM despesas WHERE data >= ?", db, params=(data_inicio,))
+    despesas_df = pd.read_sql_query("SELECT * FROM despesas", db, parse_dates=['data'])
     produtos_df = pd.read_sql_query("SELECT id, nome FROM produtos", db)
-    if not vendas_df.empty:
-        vendas_df['data'] = pd.to_datetime(vendas_df['data'])
-    if not despesas_df.empty:
-        despesas_df['data'] = pd.to_datetime(despesas_df['data'])
+
+    # Pré calcula colunas de lucro e venda por item (para os graficos Top/Bottom)
+    if not venda_itens_df.empty:
+        # CORREÇÃO 1: 'custo_unitario_producao'
+        venda_itens_df['lucro_bruto_item'] = (venda_itens_df['preco_unitario_venda'] - venda_itens_df[
+            'custo_unitario_producao']) * venda_itens_df['quantidade']
+        venda_itens_df['total_venda_item'] = venda_itens_df['preco_unitario_venda'] * venda_itens_df['quantidade']
+    else:
+        # Garante que as colunas existam mesmo sem valores
+        venda_itens_df['lucro_bruto_item'] = pd.Series(dtype='float')
+        venda_itens_df['total_venda_item'] = pd.Series(dtype='float')
     return vendas_df, venda_itens_df, despesas_df, produtos_df
 
+def get_despesas_recentes(limite=20):
+    """Busca as N despesas mais recentes."""
+    cursor = get_db().cursor()
+    cursor.execute("SELECT * FROM despesas ORDER BY data DESC, id DESC LIMIT ?", (limite,))
+    return cursor.fetchall()
+
+def delete_despesa(despesa_id):
+    """Exclui uma despesa específica do banco."""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM despesas WHERE id = ?", (despesa_id,))
+    db.commit()
+
+def get_vendas_recentes(limite=20):
+    """Busca as N vendas mais recentes."""
+    cursor = get_db().cursor()
+    cursor.execute("SELECT * FROM vendas ORDER BY data DESC, id DESC LIMIT ?", (limite,))
+    return cursor.fetchall()
+
+def delete_venda(venda_id):
+    """Exclui uma venda específica do banco.
+    O 'ON DELETE CASCADE' na tabela venda_itens cuidará dos itens.
+    """
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM vendas WHERE id = ?", (venda_id,))
+    db.commit()
+
+
+@app.route("/financeiro/dashboard")
+def dashboard_financeiro():
+    # 1. Obter e Tratar Datas do Filtro
+    data_inicio_str = request.args.get('start_date')
+    data_fim_str = request.args.get('end_date')
+
+    # Define datas padrao(ultimos 90 dias) se nenhum filtro for aplicado
+    if not data_fim_str:
+        data_fim = datetime.now()
+    else:
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+    if not data_inicio_str:
+        data_inicio = data_fim - timedelta(days=90)
+    else:
+        data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+
+    # Converte para date para comparações seguras com pandas
+    data_inicio_filtro = data_inicio.date()
+    data_fim_filtro = data_fim.date()
+
+    # 2. Obter Todos os dados do DB
+    vendas_df, vendas_itens_df, despesas_df, produtos_df = get_dados_financeiros()
+
+    # 3. Calcular Periodos Anteriores para KPIs de Crescimento
+
+    # Periodo Semana Anterior (7 dias antes do inicio do filtro)
+    data_fim_sem_ant = data_inicio_filtro - timedelta(days=1)
+    # CORREÇÃO 2: Lógica de data
+    data_inicio_sem_ant = data_fim_sem_ant - timedelta(days=6)  # 7 dias de periodo
+
+    # Periodo Mês Anterior (30 dias antes do inicio do filtro)
+    data_fim_mes_ant = data_inicio_filtro - timedelta(days=1)
+    # CORREÇÃO 3: Lógica de data
+    data_inicio_mes_ant = data_fim_mes_ant - timedelta(days=29)  # 30 dias de periodo
+
+    # 4. Função Helper Interna para Calcular KPIs por Periodo
+    def calcular_kpis_periodo(df_v, df_i, df_d, inicio, fim):
+        # Filtra os dataframes por periodo de data
+        vendas_periodo = df_v[
+            (df_v['data'].dt.date >= inicio) & (df_v['data'].dt.date <= fim)
+            ].copy()
+        despesas_periodo = df_d[
+            (df_d['data'].dt.date >= inicio) & (df_d['data'].dt.date <= fim)
+            ].copy()
+
+        itens_periodo = df_i[df_i['venda_id'].isin(vendas_periodo['id'])]
+
+        # Calcular KPIs
+        total_vendido = vendas_periodo['total_venda'].sum()
+        total_gasto = despesas_periodo['valor'].sum()
+        lucro_liquido = total_vendido - total_gasto
+        total_quantidade = itens_periodo['quantidade'].sum()
+
+        return {
+            'total_vendido': total_vendido,
+            'total_gasto': total_gasto,
+            'lucro_liquido': lucro_liquido,
+            'total_quantidade': total_quantidade,
+        }
+
+    # --- Fim da Função Helper ---
+
+    # 5. Calcular KPIs para os 3 periodos
+    kpis_atual = calcular_kpis_periodo(vendas_df, vendas_itens_df, despesas_df, data_inicio_filtro, data_fim_filtro)
+    # CORREÇÃO 4: Datas corretas
+    kpis_sem_ant = calcular_kpis_periodo(vendas_df, vendas_itens_df, despesas_df, data_inicio_sem_ant, data_fim_sem_ant)
+    # CORREÇÃO 5: Datas corretas
+    kpis_mes_ant = calcular_kpis_periodo(vendas_df, vendas_itens_df, despesas_df, data_inicio_mes_ant, data_fim_mes_ant)
+
+    # 6. Calcular Crescimento %
+    cresc_semana = calcular_crescimento(kpis_atual['lucro_liquido'], kpis_sem_ant['lucro_liquido'])
+    # CORREÇÃO 6: Função correta
+    cresc_mes = calcular_crescimento(kpis_atual['lucro_liquido'], kpis_mes_ant['lucro_liquido'])
+
+    # 7. Prepara Dados para graficos (usando dados do periodo atual)
+
+    # Re-filtrar os DFs do periodo atual
+    vendas_atuais = vendas_df[
+        (vendas_df['data'].dt.date >= data_inicio_filtro) & (vendas_df['data'].dt.date <= data_fim_filtro)
+        ].copy()  # <--- CORREÇÃO 7: Parênteses
+    despesas_atuais = despesas_df[
+        (despesas_df['data'].dt.date >= data_inicio_filtro) & (despesas_df['data'].dt.date <= data_fim_filtro)
+        ].copy()
+    # CORREÇÃO 8: DataFrame correto
+    itens_atuais = vendas_itens_df[vendas_itens_df['venda_id'].isin(vendas_atuais['id'])].copy()
+
+    # Merge de itens com produtos para pegar os Nomes
+    if not itens_atuais.empty and not produtos_df.empty:
+        itens_com_produtos = pd.merge(itens_atuais, produtos_df, left_on='produto_id', right_on='id', how='left')
+    else:
+        # Cria DF vazio com colunas necessarias se nao houver dados
+        itens_com_produtos = pd.DataFrame(columns=['nome', 'quantidade', 'lucro_bruto_item', 'total_venda_item'])
+
+    # --- Grafico 1 & 2 Evolução Semanal ---
+    # Resample Vendas por Semana (W-Mon = Inicios da Semana na Segunda)
+    vendas_semanais = vendas_atuais.set_index('data').resample('W-Mon', label='left', closed='left')[
+        'total_venda'].sum().reset_index()
+    # CORREÇÃO 9: 'closed' consistente
+    despesas_semanais = despesas_atuais.set_index('data').resample('W-Mon', label='left', closed='left')[
+        'valor'].sum().reset_index()
+
+    # Juntar dados semanais
+    evolucao_df = pd.merge(vendas_semanais, despesas_semanais, on='data', how='outer').fillna(0)
+    evolucao_df['lucro_liquido'] = evolucao_df['total_venda'] - evolucao_df['valor']
+
+    # Grafico 1: Lucro Bruto Liquido e Venda (linha)
+    fig_evolucao_lucro_venda = go.Figure()
+    fig_evolucao_lucro_venda.add_trace(
+        go.Scatter(x=evolucao_df['data'], y=evolucao_df['lucro_liquido'], mode='lines+markers',  name='Lucro Líquido (Venda-Despesa)', hovertemplate= '<b>Semana de:</b> %{x|%d/%m/%Y}<br>' + '<b>Lucro Líquido:</b> R$ %{y:,.2f}<extra></extra>'))
+    fig_evolucao_lucro_venda.add_trace(go.Scatter(x=evolucao_df['data'], y=evolucao_df['total_venda'], mode='lines+markers', name='Total Vendido', hovertemplate = '<b>Semana de:</b> %{x|%d/%m/%Y}<br>' +'<b>Total Vendido:</b> R$ %{y:,.2f}<extra></extra>'))
+    fig_evolucao_lucro_venda.update_layout(title='Evolução Semanal: Lucro Liquido vs Vendas', xaxis_title='Semana', yaxis_title = 'Valor (R$)', hovermode="x unified")
+    graph_evolucao_lucro_venda_html = fig_evolucao_lucro_venda.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # Grafico 2: Lucro Liquido e Venda (Linha)
+    fig_evolucao_gastos = px.line(evolucao_df, x='data', y='valor', title='Evolução Gastos Semanais', markers=True)
+    fig_evolucao_gastos.update_traces(
+        hovertemplate='<b>Semana de:</b> %{x|%d/%m/%Y}<br>' +
+                      '<b>Gastos:</b> R$ %{y:,.2f}<extra></extra>'
+    )
+    fig_evolucao_gastos.update_layout(
+        yaxis_title='Valor (R$)'
+    )
+    graph_evolucao_gastos_html = fig_evolucao_gastos.to_html(full_html=False, include_plotlyjs='cdn')
+    # Grafico 3, 4, 5 : Top Bottom
+    # Agrupa todos os itens vendidos por nome do produto
+    produtos_agrupados = itens_com_produtos.groupby('nome').agg(
+        total_vendido = ('total_venda_item', 'sum'),
+        total_lucro_bruto = ('lucro_bruto_item', 'sum'),
+        total_quantidade = ('quantidade', 'sum')
+    ).reset_index()
+    produtos_agrupados['total_vendido'] = pd.to_numeric(produtos_agrupados['total_vendido'])
+    produtos_agrupados['total_lucro_bruto'] = pd.to_numeric(produtos_agrupados['total_lucro_bruto'])
+    produtos_agrupados['total_quantidade'] = pd.to_numeric(produtos_agrupados['total_quantidade'])
+
+    #Grafico 3: Top/ Bottom 5 Valor Vendido
+    top5_vendido = produtos_agrupados.nlargest(5, 'total_vendido')
+    bottom5_vendido = produtos_agrupados.nsmallest(5, 'total_vendido')
+    fig_top_bottom_vendido = px.bar(pd.concat([top5_vendido, bottom5_vendido]), x = 'nome', y = 'total_vendido', title = 'Top/Bottom 5 Produtos por Valor Vendido')
+    graph_top_bottom_vendido_html = fig_top_bottom_vendido.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # Grafico 4: Top / Bottom 5 Lucro Bruto
+    top5_lucro = produtos_agrupados.nlargest(5,'total_lucro_bruto')
+    bottom5_lucro = produtos_agrupados.nsmallest(5, 'total_lucro_bruto')
+    fig_top_bottom_lucro_bruto = px.bar(pd.concat([top5_lucro, bottom5_lucro]), x='nome', y="total_lucro_bruto", title="Top/Bottoms 5 Produtos por Lucro Bruto")
+    graph_top_bottom_lucro_html = fig_top_bottom_lucro_bruto.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # Grafico 5: Top / Bottom 5 Quantidade Vendida
+    top5_quantidade = produtos_agrupados.nlargest(5,"total_quantidade")
+    bottom5_quantidade = produtos_agrupados.nsmallest(5, 'total_quantidade')
+    fig_top_bottom_quantidade = px.bar(pd.concat([top5_quantidade, bottom5_quantidade]), x= 'nome', y='total_quantidade', title="Top/Bottom 5 Produtos por Quantidade Vendida")
+    graph_top_bottom_qtd_html = fig_top_bottom_quantidade.to_html(full_html=False, include_plotlyjs='cdn')
+
+    # --- 8. Enviar tudo para o Template ---
+    return render_template('dashboard.html',
+                           # KPIs
+                           kpis=kpis_atual,
+                           cresc_semana=cresc_semana,
+                           cresc_mes=cresc_mes,
+                           # Gráficos
+                           graph_evolucao_lucro_venda_html=graph_evolucao_lucro_venda_html,
+                           graph_evolucao_gastos_html=graph_evolucao_gastos_html,
+                           graph_top_bottom_vendido_html=graph_top_bottom_vendido_html,
+                           graph_top_bottom_lucro_html=graph_top_bottom_lucro_html,
+                           graph_top_bottom_qtd_html=graph_top_bottom_qtd_html,
+                           # Filtros (para preencher os campos de data)
+                           data_inicio=data_inicio_filtro.strftime('%Y-%m-%d'),
+                           data_fim=data_fim_filtro.strftime('%Y-%m-%d')
+                           )
 
 # --- Rotas da Aplicação (Views) ---
 
@@ -514,6 +755,60 @@ def excluir_receita(receita_id):
         flash("Receita não encontrada!", "error")
     return redirect(url_for("gerir_receitas"))
 
+
+@app.route("/receita/<int:receita_id>")
+def ver_receita(receita_id):
+    receita = get_receita(receita_id)
+    if not receita:
+        flash("Receita não encontrada!", "error")
+        return redirect(url_for("gerir_receitas"))
+
+    # 1. Obter ingredientes e calcular o custo de CADA UM (necessário para a lista no HTML)
+    ingredientes_db = get_ingredientes_receita(receita_id)
+    ingredientes_com_custo = []
+    custo_ingredientes_total = 0
+
+    for ingr in ingredientes_db:
+        # Reutiliza suas funções de cálculo
+        qtd_gramas = converter_para_gramas(ingr['quantidade'], ingr['unidade'], ingr['densidade'])
+        custo_item = calcular_custo_ingrediente(ingr['preco_embalagem'], ingr['quant_embalagem'], qtd_gramas)
+
+        # Converte a linha do DB (sqlite3.Row) para um dicionário para podermos adicionar a chave 'custo'
+        ingr_dict = dict(ingr)
+        ingr_dict['custo'] = custo_item
+        ingredientes_com_custo.append(ingr_dict)
+
+        # Soma o custo total dos ingredientes
+        custo_ingredientes_total += custo_item
+
+    # 2. Obter custos adicionais (a lista)
+    custos_adicionais_db = get_custos_adicionais_receita(receita_id)
+
+    # 3. Calcular o total dos custos adicionais (usando sua função que já existe)
+    custo_adicional_total = calcular_custo_adicional_total(receita_id)
+
+    # 4. Calcular o Custo Total da Receita
+    custo_total = custo_ingredientes_total + custo_adicional_total
+
+
+    rendimento = receita['rendimento']
+
+    # Garante que o rendimento (que vem do DB) não é Nulo ou 0
+    if not rendimento or rendimento == 0:
+        rendimento = 1  # Evita erro de divisão por zero
+
+    custo_unitario = custo_total / rendimento
+    # ==============================================
+
+    # 5. Enviar tudo para o template
+    return render_template("ver_receita.html",
+                           receita=receita,
+                           ingredientes=ingredientes_com_custo,
+                           custos_adicionais=custos_adicionais_db,
+                           custo_ingredientes=custo_ingredientes_total,
+                           custo_adicional_total=custo_adicional_total,
+                           custo_total=custo_total,
+                           custo_unitario=custo_unitario)  # <-- Nova variável enviada
 
 @app.route("/adicionar_ingredientes/<int:receita_id>", methods=["GET", "POST"])
 def adicionar_ingredientes(receita_id):
@@ -648,36 +943,146 @@ def custos_adicionais():
 @app.route("/novo_custo_adicional", methods=["GET", "POST"])
 def novo_custo_adicional():
     if request.method == "POST":
-        # ... (código existente)
-        pass
+        try:
+            # 1. Obter dados do formulário
+            nome = request.form['nome'].strip()
+            tipo = request.form['tipo']
+            custo_unitario = float(request.form['custo_unitario'])
+
+            # Usar .get() para campos que podem estar vazios
+            unidade_medida = request.form.get('unidade_medida')
+
+            # Usar .get() com um valor padrão para números
+            vida_util_str = request.form.get('vida_util')
+            vida_util = int(vida_util_str) if vida_util_str and vida_util_str.isdigit() else None
+
+            descricao = request.form.get('descricao')
+
+            if not nome or not tipo or custo_unitario is None:
+                flash("Nome, Tipo e Custo Unitário são obrigatórios.", "error")
+                return render_template("novo_custo_adicional.html", **request.form)
+
+            # 2. Chamar sua função do "Passo 4" para salvar no DB
+            add_custo_adicional(nome, tipo, custo_unitario, unidade_medida, vida_util, descricao)
+
+            flash(f"Custo '{nome}' adicionado com sucesso!", "success")
+            return redirect(url_for('custos_adicionais'))  # Redirecionar de volta para a lista
+
+        except Exception as e:
+            flash(f"Erro ao adicionar custo: {e}", "error")
+            # Re-renderiza o formulário mantendo os dados que o usuário digitou
+            return render_template("novo_custo_adicional.html", **request.form)
+
+    # Se for GET, apenas mostre a página
     return render_template("novo_custo_adicional.html")
 
 
 @app.route("/editar_custo_adicional/<int:custo_id>", methods=["GET", "POST"])
 def editar_custo_adicional(custo_id):
-    # ... (código existente)
-    pass
+    # Busca o custo no DB
+    custo = get_custo_adicional_by_id(custo_id)
+    if not custo:
+        flash("Custo adicional não encontrado!", "error")
+        return redirect(url_for('custos_adicionais'))
+
+    if request.method == "POST":
+        try:
+            # 1. Coletar dados do formulário
+            nome = request.form['nome'].strip()
+            tipo = request.form['tipo']
+            custo_unitario = float(request.form['custo_unitario'])
+            unidade_medida = request.form.get('unidade_medida')
+            vida_util_str = request.form.get('vida_util')
+            vida_util = int(vida_util_str) if vida_util_str and vida_util_str.isdigit() else None
+            descricao = request.form.get('descricao')
+
+            if not nome or not tipo or custo_unitario is None:
+                flash("Nome, Tipo e Custo Unitário são obrigatórios.", "error")
+                # Passa o 'custo' original de volta para o template em caso de erro
+                return render_template("editar_custo_adicional.html", custo=custo)
+
+            # 2. Chamar a função de atualização do DB
+            update_custo_adicional(custo_id, nome, tipo, custo_unitario, unidade_medida, vida_util, descricao)
+
+            flash(f"Custo '{nome}' atualizado com sucesso!", "success")
+            return redirect(url_for('custos_adicionais'))
+
+        except Exception as e:
+            flash(f"Erro ao atualizar custo: {e}", "error")
+            return render_template("editar_custo_adicional.html", custo=custo)
+
+    # Se for GET, apenas mostra a página de edição com os dados do custo
+    return render_template("editar_custo_adicional.html", custo=custo)
 
 
 @app.route("/excluir_custo_adicional/<int:custo_id>", methods=["POST"])
 def excluir_custo_adicional(custo_id):
-    # ... (código existente)
-    pass
+    # (Opcional: Adicionar verificação se o custo está em uso em alguma receita)
+    custo = get_custo_adicional_by_id(custo_id)
+    if custo:
+        delete_custo_adicional(custo_id)
+        flash(f"Custo '{custo['nome']}' excluído com sucesso!", "success")
+    else:
+        flash("Custo não encontrado!", "error")
+    return redirect(url_for('custos_adicionais'))
 
 
 @app.route("/adicionar_custo_receita/<int:receita_id>", methods=["GET", "POST"])
 def adicionar_custo_receita(receita_id):
-    # ... (código existente)
-    pass
+    receita = get_receita(receita_id)
+    if not receita:
+        flash("Receita não encontrada!", "error")
+        return redirect(url_for('gerir_receitas'))
+
+    if request.method == "POST":
+        try:
+            custo_id = int(request.form['custo_adicional_id'])
+            quantidade = float(request.form['quantidade_utilizada'])
+
+            if not custo_id or quantidade <= 0:
+                flash("Selecione um custo e uma quantidade válida.", "error")
+            else:
+                add_custo_adicional_receita(receita_id, custo_id, quantidade)
+                flash("Custo adicionado à receita!", "success")
+
+        except Exception as e:
+            flash(f"Erro ao adicionar custo: {e}", "error")
+
+        # Redireciona de volta para a mesma página (GET) para mostrar a lista atualizada
+        return redirect(url_for('adicionar_custo_receita', receita_id=receita_id))
+
+    # (Método GET)
+    # Busca os custos que já estão na receita
+    custos_na_receita = get_custos_adicionais_receita(receita_id)
+    # Busca todos os custos disponíveis no catálogo
+    todos_custos_disponiveis = get_custos_adicionais()
+
+    return render_template("adicionar_custo_receita.html",
+                           receita=receita,
+                           custos_da_receita=custos_na_receita,
+                           todos_custos=todos_custos_disponiveis)
 
 
 @app.route("/excluir_custo_receita/<int:custo_receita_id>", methods=["POST"])
 def excluir_custo_receita(custo_receita_id):
-    # ... (código existente)
-    pass
+    # Usamos a nova função helper que criamos
+    custo_associado = get_custo_adicional_receita_by_id(custo_receita_id)
+
+    if custo_associado:
+        # Guarda o ID da receita ANTES de deletar
+        receita_id = custo_associado['receita_id']
+
+        delete_custo_adicional_receita(custo_receita_id)
+        flash("Custo removido da receita!", "success")
+
+        # Redireciona de volta para a página de "adicionar custos" daquela receita
+        return redirect(url_for('adicionar_custo_receita', receita_id=receita_id))
+
+    flash("Associação de custo não encontrada!", "error")
+    return redirect(url_for('gerir_receitas'))
 
 
-# --- Rotas de Produtos (NOVAS) ---
+# --- Rotas de Produtos
 @app.route("/produtos")
 def gerir_produtos():
     produtos = get_produtos()
@@ -737,9 +1142,9 @@ def lancamentos_financeiros():
                 else:
                     add_venda(venda_itens, data, metodo_pagamento)
                     flash('Venda registada com sucesso!', 'success')
-                return redirect(url_for('lancamentos_financeiros'))
             except Exception as e:
                 flash(f'Erro ao registar venda: {e}', 'error')
+
         elif form_type == 'despesa':
             try:
                 data = request.form.get('data_despesa')
@@ -748,81 +1153,48 @@ def lancamentos_financeiros():
                 categoria = request.form.get('categoria')
                 add_despesa(descricao, valor, data, categoria)
                 flash('Despesa registada com sucesso!', 'success')
-                return redirect(url_for('lancamentos_financeiros'))
             except Exception as e:
                 flash(f'Erro ao registar despesa: {e}', 'error')
 
+        return redirect(url_for('lancamentos_financeiros'))
+
+    # --- LÓGICA GET ORIGINAL (apenas carrega produtos) ---
     produtos = get_produtos()
     return render_template('lancamentos.html', produtos=produtos)
 
 
-@app.route("/financeiro/dashboard")
-def dashboard_financeiro():
-    dados = get_dados_financeiros(periodo_dias=90)
-    if dados is None:
-        vendas_df = pd.DataFrame(columns=['data', 'total_venda', 'id'])
-        venda_itens_df = pd.DataFrame(
-            columns=['venda_id', 'produto_id', 'quantidade', 'preco_unitario_venda', 'custo_unitario_producao'])
-        despesas_df = pd.DataFrame(columns=['valor'])
-        produtos_df = pd.DataFrame(columns=['id', 'nome'])
-    else:
-        vendas_df, venda_itens_df, despesas_df, produtos_df = dados
+@app.route("/financeiro/gerir")
+def gerir_lancamentos():
+    vendas_recentes = get_vendas_recentes(20)
+    despesas_recentes = get_despesas_recentes(20)
 
-    if not venda_itens_df.empty and not vendas_df.empty:
-        venda_itens_df['lucro_item'] = (venda_itens_df['preco_unitario_venda'] - venda_itens_df[
-            'custo_unitario_producao']) * venda_itens_df['quantidade']
-        vendas_com_lucro_df = pd.merge(vendas_df, venda_itens_df, left_on='id', right_on='venda_id')
-    else:
-        vendas_com_lucro_df = pd.DataFrame(columns=['data', 'lucro_item', 'produto_id'])
+    return render_template('gerir_lancamentos.html',
+                           vendas=vendas_recentes,
+                           despesas=despesas_recentes)
 
-    lucro_bruto_total = vendas_com_lucro_df['lucro_item'].sum()
-    gasto_total_mensal = despesas_df['valor'].sum()
-    lucro_liquido = lucro_bruto_total - gasto_total_mensal
-    total_vendas = vendas_df['total_venda'].sum()
+@app.route("/financeiro/excluir_venda/<int:venda_id>", methods=['POST'])
+def excluir_venda(venda_id):
+    try:
+        delete_venda(venda_id)
+        flash("Venda excluída com sucesso!", "success")
+    except Exception as e:
+        flash(f"Erro ao excluir venda: {e}", "error")
+    # CORREÇÃO AQUI:
+    return redirect(url_for('gerir_lancamentos'))
 
-    # Criação dos Gráficos com Plotly
-    fig_evolucao_lucro = go.Figure()
-    if not vendas_com_lucro_df.empty and 'data' in vendas_com_lucro_df.columns and not vendas_com_lucro_df[
-        'data'].isnull().all():
-        lucro_semanal = vendas_com_lucro_df.set_index('data').resample('W-Mon', label='left', closed='left')[
-            'lucro_item'].sum().reset_index()
-        fig_evolucao_lucro.add_trace(
-            go.Scatter(x=lucro_semanal['data'], y=lucro_semanal['lucro_item'], mode='lines+markers',
-                       name='Lucro Bruto'))
-    fig_evolucao_lucro.update_layout(title='Evolução do Lucro Bruto Semanal', xaxis_title='Semana',
-                                     yaxis_title='Lucro (R$)')
-    graph_evolucao_lucro_html = fig_evolucao_lucro.to_html(full_html=False, include_plotlyjs='cdn')
-
-    if not venda_itens_df.empty and not produtos_df.empty:
-        top_produtos_vendas = venda_itens_df.groupby('produto_id')['quantidade'].sum().nlargest(5).reset_index()
-        top_produtos_vendas = pd.merge(top_produtos_vendas, produtos_df, left_on='produto_id', right_on='id')
-        fig_top_vendas = px.bar(top_produtos_vendas, x='nome', y='quantidade',
-                                title='Top 5 Produtos por Quantidade Vendida')
-    else:
-        fig_top_vendas = px.bar(title='Top 5 Produtos por Quantidade Vendida')
-    graph_top_vendas_html = fig_top_vendas.to_html(full_html=False, include_plotlyjs='cdn')
-
-    if not vendas_com_lucro_df.empty and not produtos_df.empty:
-        top_produtos_lucro = vendas_com_lucro_df.groupby('produto_id')['lucro_item'].sum().nlargest(5).reset_index()
-        top_produtos_lucro = pd.merge(top_produtos_lucro, produtos_df, left_on='produto_id', right_on='id')
-        fig_top_lucro = px.bar(top_produtos_lucro, x='nome', y='lucro_item', title='Top 5 Produtos por Lucro Gerado')
-    else:
-        fig_top_lucro = px.bar(title='Top 5 Produtos por Lucro Gerado')
-    graph_top_lucro_html = fig_top_lucro.to_html(full_html=False, include_plotlyjs='cdn')
-
-    return render_template('dashboard.html',
-                           lucro_bruto_total=lucro_bruto_total,
-                           gasto_total_mensal=gasto_total_mensal,
-                           lucro_liquido=lucro_liquido,
-                           total_vendas=total_vendas,
-                           graph_evolucao_lucro_html=graph_evolucao_lucro_html,
-                           graph_top_vendas_html=graph_top_vendas_html,
-                           graph_top_lucro_html=graph_top_lucro_html)
+@app.route("/financeiro/excluir_despesa/<int:despesa_id>", methods=['POST'])
+def excluir_despesa(despesa_id):
+    try:
+        delete_despesa(despesa_id)
+        flash("Despesa excluída com sucesso!", "success")
+    except Exception as e:
+        flash(f"Erro ao excluir despesa: {e}", "error")
+    # CORREÇÃO AQUI:
+    return redirect(url_for('gerir_lancamentos'))
 
 
 # --- Rotas Utilitárias ---
-@app.route("/reset_db", methods=["POST"])
-def reset_db():
+def executar_reset_db():
     try:
         close_connection(None)
         if os.path.exists(DATABASE):
@@ -831,8 +1203,24 @@ def reset_db():
         flash("Banco de dados resetado com sucesso!", "success")
     except Exception as e:
         flash(f"Erro ao resetar o banco de dados: {e}", "error")
-    return redirect(url_for("index"))
 
+@app.route("/confirmar_reset", methods=["GET", "POST"])
+def confirmar_reset():
+    if request.method == "POST":
+        senha_digitada = request.form.get("password")
+
+        # 3. VERIFICA A SENHA DEFINIDA NO PASSO 1
+        if senha_digitada == ADMIN_PASSWORD:
+            # Senha correta: executa o reset e vai para o início
+            executar_reset_db()
+            return redirect(url_for("index"))
+        else:
+            # Senha incorreta: exibe erro e recarrega a página de senha
+            flash("Senha incorreta. O banco de dados NÃO foi resetado.", "error")
+            return redirect(url_for('confirmar_reset'))
+
+    # Se for método GET, apenas mostra a página de confirmação
+    return render_template("confirmar_reset.html")
 
 @app.route("/debug/db")
 def debug_db():

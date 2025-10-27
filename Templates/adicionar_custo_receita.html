@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Adicionar Custos à Receita - Julli's Brigadeiros
+{% endblock %}
+
+{% block subtitle %}
+    Custos Adicionais - {{ receita['nome'] }}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>💰 Custos Adicionais para {{ receita['nome'] }}</h1>
+
+    <h2>➕ Adicionar Novo Custo à Receita</h2>
+    <form method="POST">
+        <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+                <label for="custo_adicional_id">Custo:</label>
+                <select name="custo_adicional_id" id="custo_adicional_id" required>
+                    <option value="">Selecione um custo</option>
+                    {% for custo in todos_custos %}
+                        <option value="{{ custo['id'] }}">{{ custo['nome'] }} (R$ {{ "%.2f"|format(custo['custo_unitario']) }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="flex: 1;">
+                <label for="quantidade_utilizada">Quantidade:</label>
+                <input type="number"
+                       step="any"
+                       name="quantidade_utilizada"
+                       id="quantidade_utilizada"
+                       value="1"
+                       required>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <button type="submit" class="btn btn-primary">
+                Adicionar Custo à Receita
+            </button>
+        </div>
+    </form>
+</div>
+
+{% if custos_da_receita %}
+    <div class="card">
+        <h2>📋 Custos Adicionais da Receita</h2>
+        <ul class="item-list">
+            {% for custo in custos_da_receita %}
+                <li class="item-list-item">
+                    <div class="item-info">
+                        <span class="item-name">{{ custo['nome'] }}</span>
+                        <div class="item-details">
+                            {{ custo['quantidade_utilizada'] }} {{ custo['unidade_medida'] }}
+                        </div>
+                    </div>
+                    <div class="item-actions">
+                         <span class="item-cost">
+                            {% if custo['vida_util'] and custo['vida_util'] > 0 %}
+                                R$ {{ "%.2f"|format(custo['custo_unitario'] / custo['vida_util'] * custo['quantidade_utilizada']) }}
+                            {% else %}
+                                R$ {{ "%.2f"|format(custo['custo_unitario'] * custo['quantidade_utilizada']) }}
+                            {% endif %}
+                        </span>
+                        <form action="{{ url_for('excluir_custo_receita', custo_receita_id=custo['id']) }}" method="POST">
+                            <button type="submit" class="btn btn-small btn-danger"
+                                    onclick="return confirm('Remover este custo da receita?')">
+                                🗑️
+                            </button>
+                        </form>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state-icon">📦</div>
+            <h3>Nenhum custo adicional adicionado a esta receita</h3>
+            <p>Adicione custos como embalagens e gás para um cálculo mais preciso.</p>
+        </div>
+    </div>
+{% endif %}
+
+<div class="nav-buttons">
+    <a href="{{ url_for('ver_receita', receita_id=receita['id']) }}" class="btn btn-success">
+        ✅ Finalizar e Ver Resumo
+    </a>
+    <a href="{{ url_for('adicionar_ingredientes', receita_id=receita['id']) }}" class="btn btn-secondary">
+        ← Voltar aos Ingredientes
+    </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('custo_adicional_id').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption.text.toLowerCase().includes('pacote') || selectedOption.text.toLowerCase().includes('caixa')) {
+            document.getElementById('quantidade_utilizada').value = '1';
+        }
+    });
+</script>
+{% endblock %}
