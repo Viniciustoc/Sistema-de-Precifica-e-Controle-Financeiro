@@ -24,7 +24,17 @@ Gestão de Vendas e Despesas
                 <li class="item-list-item">
                     <div class="item-info">
                         <span class="item-name">{{ venda['data'] }} - Total: R$ {{ "%.2f"|format(venda['total_venda']) }}</span>
-                        <div class="item-details">ID: {{ venda['id'] }} | Pag: {{ venda['metodo_pagamento'] }}</div>
+                        <div class="item-details">
+                            {% if venda['itens'] %}
+                                {% for item in venda['itens'] %}
+                                    {{ item['quantidade'] }}x {{ item['nome'] or 'Produto Excluído' }}
+                                    {% if not loop.last %}, {% endif %} {% endfor %}
+                            {% else %}
+                                (Venda sem itens registrados)
+                            {% endif %}
+                            <br>
+                            <small>ID: {{ venda['id'] }} | Pag: {{ venda['metodo_pagamento'] }}</small>
+                        </div>
                     </div>
                     <div class="item-actions">
                         <form action="{{ url_for('excluir_venda', venda_id=venda['id']) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir esta VENDA?');">

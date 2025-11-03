@@ -17,9 +17,13 @@
                 <div class="item-details" style="color: var(--success-green);">Custo Estimado: R$ {{ "%.2f"|format(calcular_custo_produto(produto['id'])) }}</div>
             </div>
             <div class="item-actions">
-                <form action="{{ url_for('excluir_produto', produto_id=produto['id']) }}" method="POST">
-                    <button type="submit" class="btn btn-small btn-danger" onclick="return confirm('Tem a certeza?')">🗑️ Excluir</button>
-                </form>
+                    <a href="{{ url_for('editar_produto', produto_id=produto['id']) }}" class="btn btn-small btn-secondary">
+                        ✏️ Editar
+                    </a>
+
+                    <form action="{{ url_for('excluir_produto', produto_id=produto['id']) }}" method="POST" onsubmit="return confirm('Tem a certeza que deseja excluir este produto?');">
+                        <button type="submit" class="btn btn-small btn-danger">🗑️ Excluir</button>
+                    </form>
             </div>
         </li>
         {% endfor %}

@@ -32,8 +32,15 @@ O seu livro de receitas para cálculo de custos
             <div class="item-actions">
                 <a href="{{ url_for('adicionar_ingredientes', receita_id=receita['id']) }}" class="btn btn-small btn-secondary">Ingredientes</a>
                 <a href="{{ url_for('editar_receita', receita_id=receita['id']) }}" class="btn btn-small btn-secondary">✏️ Editar</a>
+
+                <form action="{{ url_for('duplicar_receita', receita_id=receita['id']) }}" method="POST" style="display: inline;">
+                    <button type
+="submit" class="btn btn-small btn-secondary" title="Duplicar">
+                        📋 Duplicar
+                    </button>
+                </form>
                 <form action="{{ url_for('excluir_receita', receita_id=receita['id']) }}" method="POST" style="display: inline;">
-                    <button type="submit" class="btn btn-small btn-danger" ... onclick="return confirm('Tem a certeza que deseja excluir a receita ' + {{ receita['nome'] | tojson }} + '?')">🗑️ Excluir</button>
+                    <button type="submit" class="btn btn-small btn-danger" ...>🗑️ Excluir</button>
                 </form>
             </div>
         </li>

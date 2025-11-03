@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Produto - Julli's Brigadeiros{% endblock %}
+
+{% block subtitle %}
+    A editar: {{ produto['nome'] }}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>✏️ Editar Produto</h1>
+
+    <form id="form-produto" method="POST" action="{{ url_for('editar_produto', produto_id=produto['id']) }}">
+
+        <input type="hidden" name="composicao_json" id="composicao_json">
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="nome">Nome do Produto:</label>
+                <input type="text" name="nome" id="nome" value="{{ produto['nome'] }}" required>
+            </div>
+            <div class="form-group">
+                <label for="preco_venda">Preço de Venda (R$):</label>
+                <input type="number" name="preco_venda" id="preco_venda" value="{{ produto['preco_venda'] }}" step="0.01" required>
+            </div>
+        </div>
+        <hr>
+
+        <h3>Composição Atual do Produto</h3>
+        <div id="composicao-container">
+            <p style="text-align: center; color: #777;">Carregando...</p>
+        </div>
+
+        <div class="form-row" style="align-items: flex-end; border-top: 1px solid #eee; padding-top: 1rem; margin-top: 1rem;">
+            <div class="form-group" style="flex: 3;">
+                <label for="receita_select">Adicionar Receita:</label>
+                <select id="receita_select">
+                    <option value="">Selecione uma receita</option>
+                    {% for receita in receitas %}
+                    <option value="{{ receita['id'] }}" data-nome="{{ receita['nome'] }}">
+                        {{ receita['nome'] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label for="item_fracao">Fração/Qtd:</label>
+                <input type="number" id="item_fracao" min="0.01" step="0.01" value="1.0">
+            </div>
+            <div class="form-group">
+                <button type="button" id="add-receita-btn" class="btn btn-secondary">Adicionar</button>
+            </div>
+        </div>
+
+        <div class="nav-buttons">
+            <button type="submit" class="btn btn-primary">💾 Salvar Alterações</button>
+            <a href="{{ url_for('gerir_produtos') }}" class="btn btn-secondary">← Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // PASSO 1: Receber os dados da composição atual que o Python enviou
+    // O filtro '|safe' é crucial para o JSON funcionar
+    let composicaoItens = {{ composicao_json|safe }};
+
+    // O resto é o JavaScript de gestão da lista
+    const addReceitaBtn = document.getElementById('add-receita-btn');
+    const composicaoContainer = document.getElementById('composicao-container');
+    const composicaoJsonInput = document.getElementById('composicao_json');
+    const receitaSelect = document.getElementById('receita_select');
+
+    /**
+     * Esta função (re)desenha a lista de composição
+     * e atualiza o campo <input> oculto com o JSON
+     */
+    function renderComposicao() {
+        composicaoContainer.innerHTML = ''; // Limpa a lista
+
+        if (composicaoItens.length === 0) {
+            composicaoContainer.innerHTML = '<p style="text-align: center; color: #777;">Este produto ainda não tem receitas na composição.</p>';
+        }
+
+        composicaoItens.forEach((item, index) => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'item-list-item';
+            itemEl.innerHTML = `
+                <div class="item-info">
+                    <span class="item-name">${item.nome}</span>
+                    <div class="item-details">Fração/Qtd: ${item.fracao_receita}</div>
+                </div>
+                <button type="button" class="btn btn-small btn-danger" onclick="removerItem(${index})">🗑️</button>
+            `;
+            composicaoContainer.appendChild(itemEl);
+        });
+
+        // Atualiza o <input> oculto com o JSON para ser enviado no POST
+        // O servidor precisa saber o ID e a fração
+        composicaoJsonInput.value = JSON.stringify(composicaoItens.map(item => ({
+            receita_id: item.id || item.receita_id, // Lida com itens novos e antigos
+            fracao: item.fracao_receita
+        })));
+    }
+
+    /**
+     * Remove um item do array e redesenha a lista
+     */
+    function removerItem(index) {
+        composicaoItens.splice(index, 1); // Remove o item do array
+        renderComposicao(); // Redesenha a lista
+    }
+
+    /**
+     * Adiciona um item do dropdown ao array e redesenha a lista
+     */
+    addReceitaBtn.addEventListener('click', () => {
+        const selectedOption = receitaSelect.options[receitaSelect.selectedIndex];
+        const receitaId = parseInt(selectedOption.value);
+        const nome = selectedOption.dataset.nome;
+        const fracao = parseFloat(document.getElementById('item_fracao').value);
+
+        if (!receitaId || isNaN(fracao) || fracao <= 0) {
+            alert('Selecione uma receita e uma fração/quantidade válida.');
+            return;
+        }
+
+        composicaoItens.push({
+            id: receitaId, // O 'id' é usado pelo 'get_composicao_produto'
+            receita_id: receitaId, // O 'receita_id' é para o 'update_produto'
+            nome: nome,
+            fracao_receita: fracao
+        });
+
+        renderComposicao();
+
+        // Limpa os campos de adição
+        receitaSelect.value = '';
+        document.getElementById('item_fracao').value = 1.0;
+    });
+
+    // PASSO 2: Renderizar a composição inicial assim que a página carregar
+    window.onload = () => {
+        renderComposicao();
+    };
+</script>
+{% endblock %}

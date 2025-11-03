@@ -39,22 +39,38 @@ def init_db():
 
         # Tabelas de Custo
         cursor.execute('''CREATE TABLE IF NOT EXISTS ingredientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE NOT NULL, preco_embalagem REAL NOT NULL,
-            quant_embalagem REAL NOT NULL, densidade REAL DEFAULT 1.0 )''')
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            nome TEXT UNIQUE NOT NULL, 
+            preco_embalagem REAL NOT NULL,
+            quant_embalagem REAL NOT NULL, 
+            densidade REAL DEFAULT 1.0 )''')
 
         cursor.execute('''CREATE TABLE IF NOT EXISTS receitas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE NOT NULL, descricao TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            nome TEXT UNIQUE NOT NULL, descricao TEXT,
             rendimento INTEGER NOT NULL DEFAULT 1 )''')
+
         cursor.execute('''CREATE TABLE IF NOT EXISTS receita_ingredientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, receita_id INTEGER NOT NULL, ingrediente_id INTEGER NOT NULL,
-            quantidade REAL NOT NULL, unidade TEXT NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            receita_id INTEGER NOT NULL, 
+            ingrediente_id INTEGER NOT NULL,
+            quantidade REAL NOT NULL, 
+            unidade TEXT NOT NULL,
             FOREIGN KEY (receita_id) REFERENCES receitas (id) ON DELETE CASCADE,
             FOREIGN KEY (ingrediente_id) REFERENCES ingredientes (id) ON DELETE CASCADE )''')
+
         cursor.execute('''CREATE TABLE IF NOT EXISTS custos_adicionais (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE NOT NULL, tipo TEXT NOT NULL,
-            custo_unitario REAL NOT NULL, unidade_medida TEXT, vida_util INTEGER, descricao TEXT )''')
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            nome TEXT UNIQUE NOT NULL, 
+            tipo TEXT NOT NULL,
+            custo_unitario REAL NOT NULL, 
+            unidade_medida TEXT, 
+            vida_util INTEGER, descricao TEXT )''')
+
         cursor.execute('''CREATE TABLE IF NOT EXISTS receita_custos_adicionais (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, receita_id INTEGER NOT NULL, custo_adicional_id INTEGER NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            receita_id INTEGER NOT NULL, 
+            custo_adicional_id INTEGER NOT NULL,
             quantidade_utilizada REAL NOT NULL,
             FOREIGN KEY (receita_id) REFERENCES receitas (id) ON DELETE CASCADE,
             FOREIGN KEY (custo_adicional_id) REFERENCES custos_adicionais (id) ON DELETE CASCADE )''')
@@ -67,7 +83,10 @@ def init_db():
             data DATE NOT NULL, categoria TEXT )''')
 
         cursor.execute('''CREATE TABLE IF NOT EXISTS vendas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, data DATE NOT NULL, total_venda REAL NOT NULL, metodo_pagamento TEXT )''')
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            data DATE NOT NULL, 
+            total_venda REAL NOT NULL, 
+            metodo_pagamento TEXT )''')
 
         cursor.execute('''CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,8 +102,12 @@ def init_db():
             FOREIGN KEY (receita_id) REFERENCES receitas (id) ON DELETE CASCADE
         )''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS venda_itens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, venda_id INTEGER NOT NULL, produto_id INTEGER,
-            quantidade INTEGER NOT NULL, preco_unitario_venda REAL NOT NULL, custo_unitario_producao REAL NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            venda_id INTEGER NOT NULL, 
+            produto_id INTEGER,
+            quantidade INTEGER NOT NULL, 
+            preco_unitario_venda REAL NOT NULL, 
+            custo_unitario_producao REAL NOT NULL,
             FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
             FOREIGN KEY (produto_id) REFERENCES produtos (id) ON DELETE SET NULL )''')
 
@@ -179,12 +202,69 @@ def delete_receita(receita_id):
     db.commit()
 
 
+# ... (após a função delete_receita)
+
+def duplicar_receita_db(receita_id):
+    """
+    Duplica uma receita existente, incluindo seus ingredientes e custos.
+    Retorna o ID da nova receita criada.
+    """
+    db = get_db()
+    cursor = db.cursor()
+
+    try:
+        # 1. Busca a receita original
+        receita_original = get_receita(receita_id)
+        if not receita_original:
+            return None
+
+        # 2. Cria um novo nome para a cópia (evitando erro de UNIQUE)
+        novo_nome = f"{receita_original['nome']} (Cópia)"
+
+        # 3. Insere a nova receita (a cópia)
+        cursor.execute("INSERT INTO receitas (nome, descricao, rendimento) VALUES(?,?,?)",
+                       (novo_nome, receita_original['descricao'], receita_original['rendimento']))
+
+        # 4. Pega o ID da nova receita que acabamos de criar
+        nova_receita_id = cursor.lastrowid
+
+        # 5. Busca ingredientes da receita original
+        ingredientes_originais = get_ingredientes_receita(receita_id)
+        for ingr in ingredientes_originais:
+            # 6. Insere os ingredientes na nova receita
+            cursor.execute(
+                """INSERT INTO receita_ingredientes 
+                   (receita_id, ingrediente_id, quantidade, unidade) 
+                   VALUES(?,?,?,?)""",
+                (nova_receita_id, ingr['ingrediente_id'], ingr['quantidade'], ingr['unidade'])
+            )
+
+        # 7. Busca custos adicionais da receita original
+        custos_originais = get_custos_adicionais_receita(receita_id)
+        for custo in custos_originais:
+            # 8. Insere os custos na nova receita
+            cursor.execute(
+                """INSERT INTO receita_custos_adicionais
+                   (receita_id, custo_adicional_id, quantidade_utilizada)
+                   VALUES(?,?,?)""",
+                (nova_receita_id, custo['custo_adicional_id'], custo['quantidade_utilizada'])
+            )
+
+        db.commit()
+        return nova_receita_id  # Retorna o ID da cópia
+
+    except Exception:
+        db.rollback()  # Desfaz tudo se algo der errado
+        return None
+
 # --- Seção Relação Receitas <--> Ingredientes ---
 def get_ingredientes_receita(receita_id):
     cursor = get_db().cursor()
     cursor.execute(
         '''
-        SELECT ri.id, i.nome, ri.quantidade, ri.unidade, i.densidade, i.preco_embalagem, i.quant_embalagem
+        SELECT ri.id, i.nome, ri.quantidade, ri.unidade, i.densidade, 
+               i.preco_embalagem, i.quant_embalagem, 
+               i.id as ingrediente_id 
         FROM receita_ingredientes ri
         JOIN ingredientes i ON ri.ingrediente_id = i.id
         WHERE ri.receita_id = ?
@@ -272,7 +352,8 @@ def delete_custo_adicional(custos_id):
 def get_custos_adicionais_receita(receita_id):
     cursor = get_db().cursor()
     cursor.execute('''SELECT rca.id, ca.nome, ca.tipo, rca.quantidade_utilizada,
-                    ca.custo_unitario, ca.unidade_medida, ca.vida_util, ca.descricao
+                    ca.custo_unitario, ca.unidade_medida, ca.vida_util, ca.descricao,
+                    ca.id as custo_adicional_id
                     FROM receita_custos_adicionais rca
                     JOIN custos_adicionais ca ON rca.custo_adicional_id = ca.id
                     WHERE rca.receita_id = ?''', (receita_id,))
@@ -337,6 +418,47 @@ def delete_produto(produto_id):
     cursor.execute("DELETE FROM produtos WHERE id = ?", (produto_id,))
     db.commit()
 
+
+
+
+def get_composicao_produto(produto_id):
+    """Busca a composição de um produto (receitas e frações)."""
+    cursor = get_db().cursor()
+    cursor.execute("""
+        SELECT r.id, r.nome, pc.fracao_receita
+        FROM produto_composicao pc
+        JOIN receitas r ON pc.receita_id = r.id
+        WHERE pc.produto_id = ?
+    """, (produto_id,))
+    return cursor.fetchall()
+
+
+def update_produto(produto_id, nome, preco_venda, composicao):
+    """Atualiza um produto e sua composição em uma única transação."""
+    db = get_db()
+    cursor = db.cursor()
+    try:
+        # 1. Atualiza a tabela principal 'produtos'
+        cursor.execute("UPDATE produtos SET nome = ?, preco_venda = ? WHERE id = ?",
+                       (nome, preco_venda, produto_id))
+
+        # 2. Deleta a composição antiga
+        cursor.execute("DELETE FROM produto_composicao WHERE produto_id = ?", (produto_id,))
+
+        # 3. Insere a nova composição
+        for item in composicao:
+            receita_id = item['receita_id']
+            fracao = item['fracao']
+            cursor.execute("""
+                INSERT INTO produto_composicao (produto_id, receita_id, fracao_receita) 
+                VALUES (?, ?, ?)
+            """, (produto_id, int(receita_id), float(fracao)))
+
+        db.commit()
+        return True
+    except sqlite3.IntegrityError:
+        db.rollback()  # Desfaz tudo se o nome do produto já existir
+        return False
 
 # --- Funções de Lógica de Negócio ---
 def converter_para_gramas(quantidade, unidade, densidade=1.0):
@@ -511,6 +633,26 @@ def delete_venda(venda_id):
     cursor = db.cursor()
     cursor.execute("DELETE FROM vendas WHERE id = ?", (venda_id,))
     db.commit()
+
+def get_itens_para_vendas(venda_ids):
+        """
+        Busca todos os itens e nomes de produtos para uma lista de IDs de venda.
+        """
+        if not venda_ids:
+            return []
+
+        # Cria a string de placeholders (?,?,?) para a query SQL
+        placeholders = ','.join('?' for _ in venda_ids)
+
+        cursor = get_db().cursor()
+        # Junta com a tabela 'produtos' para pegar o 'nome' do produto
+        cursor.execute(f"""
+            SELECT vi.*, p.nome
+            FROM venda_itens vi
+            LEFT JOIN produtos p ON vi.produto_id = p.id
+            WHERE vi.venda_id IN ({placeholders})
+        """, tuple(venda_ids))  # Passa os IDs como uma tupla
+        return cursor.fetchall()
 
 
 @app.route("/financeiro/dashboard")
@@ -754,6 +896,19 @@ def excluir_receita(receita_id):
     else:
         flash("Receita não encontrada!", "error")
     return redirect(url_for("gerir_receitas"))
+
+
+@app.route("/receitas/duplicar/<int:receita_id>", methods=["POST"])
+def duplicar_receita(receita_id):
+    nova_receita_id = duplicar_receita_db(receita_id)
+
+    if nova_receita_id:
+        flash("Receita duplicada com sucesso! Você está editando a cópia.", "success")
+        # Redireciona o usuário diretamente para a página de EDIÇÃO da nova cópia
+        return redirect(url_for('editar_receita', receita_id=nova_receita_id))
+    else:
+        flash("Erro ao duplicar a receita.", "error")
+        return redirect(url_for('gerir_receitas'))
 
 
 @app.route("/receita/<int:receita_id>")
@@ -1117,6 +1272,7 @@ def criar_produto():
 
 @app.route("/produtos/excluir/<int:produto_id>", methods=['POST'])
 def excluir_produto(produto_id):
+    """Busca as informações no Banco de Dados"""
     produto = get_produto_by_id(produto_id)
     if produto:
         delete_produto(produto_id)
@@ -1124,6 +1280,69 @@ def excluir_produto(produto_id):
     else:
         flash("Produto não encontrado.", "error")
     return redirect(url_for('gerir_produtos'))
+
+
+@app.route("/produtos/editar/<int:produto_id>", methods=['GET', 'POST'])
+def editar_produto(produto_id):
+    # (Lógica da Etapa 3 da nossa explicação)
+    produto = get_produto_by_id(produto_id)
+    if not produto:
+        flash("Produto não encontrado!", "error")
+        return redirect(url_for('gerir_produtos'))
+
+    if request.method == 'POST':
+        # (Lógica da Etapa 5 da nossa explicação)
+        nome = request.form.get('nome')
+        try:
+            preco_venda = float(request.form.get('preco_venda'))
+        except (ValueError, TypeError):
+            flash("Preço de venda inválido.", "error")
+            # Recarregar a página em caso de erro, buscando os dados novamente
+            composicao_atual = get_composicao_produto(produto_id)
+            todas_receitas = get_receitas()
+            composicao_list = [dict(row) for row in composicao_atual]  # Converte para dict
+            return render_template('editar_produto.html',
+                                   produto=produto,
+                                   composicao_json=json.dumps(composicao_list),
+                                   receitas=todas_receitas)
+
+        composicao_json = request.form.get('composicao_json')
+        composicao = json.loads(composicao_json) if composicao_json else []
+
+        if not nome or not preco_venda or not composicao:
+            flash("Todos os campos (Nome, Preço e Composição) são obrigatórios.", "error")
+        else:
+            # (Lógica da Etapa 6 da nossa explicação)
+            sucesso = update_produto(produto_id, nome, preco_venda, composicao)
+            if sucesso:
+                flash(f"Produto '{nome}' atualizado com sucesso!", "success")
+                return redirect(url_for('gerir_produtos'))
+            else:
+                flash(f"Já existe um produto com o nome '{nome}'.", "error")
+
+        # Se chegou aqui, deu erro. Recarregar a página com os dados
+        composicao_atual = get_composicao_produto(produto_id)
+        todas_receitas = get_receitas()
+        composicao_list = [dict(row) for row in composicao_atual]
+        return render_template('editar_produto.html',
+                               produto=produto,
+                               composicao_json=json.dumps(composicao_list),
+                               receitas=todas_receitas)
+
+    # (Lógica da Etapa 3 da nossa explicação - Método GET)
+    # Busca os dados para preencher o formulário
+    composicao_atual = get_composicao_produto(produto_id)
+    todas_receitas = get_receitas()
+
+    # Precisamos converter o sqlite3.Row para um dict, para que o json.dumps funcione
+    composicao_list = [dict(row) for row in composicao_atual]
+
+    return render_template('editar_produto.html',
+                           produto=produto,
+                           # Passamos o JSON para o JavaScript
+                           composicao_json=json.dumps(composicao_list),
+                           # Passamos a lista de receitas para o dropdown
+                           receitas=todas_receitas)
 
 
 # --- Rotas Financeiras (Atualizadas) ---
@@ -1165,11 +1384,35 @@ def lancamentos_financeiros():
 
 @app.route("/financeiro/gerir")
 def gerir_lancamentos():
-    vendas_recentes = get_vendas_recentes(20)
+    # 1. Busca as 20 vendas recentes (como sqlite3.Row)
+    vendas_recentes_rows = get_vendas_recentes(20)
     despesas_recentes = get_despesas_recentes(20)
 
+    # 2. Extrai os IDs das vendas
+    venda_ids = [v['id'] for v in vendas_recentes_rows]
+
+    # 3. Busca TODOS os itens para essas vendas em UMA ÚNICA query
+    itens_para_vendas = get_itens_para_vendas(venda_ids)
+
+    # 4. Agrupa os itens por venda_id em um dicionário (para consulta rápida)
+    itens_map = {}
+    for item in itens_para_vendas:
+        v_id = item['venda_id']
+        if v_id not in itens_map:
+            itens_map[v_id] = []
+        itens_map[v_id].append(item)
+
+    # 5. "Enriquece" a lista de vendas, adicionando os itens a cada uma
+    vendas_enriquecidas = []
+    for venda_row in vendas_recentes_rows:
+        venda_dict = dict(venda_row)  # Converte a linha do DB para um dicionário
+        # Adiciona a lista de itens (ou uma lista vazia se não houver)
+        venda_dict['itens'] = itens_map.get(venda_row['id'], [])
+        vendas_enriquecidas.append(venda_dict)
+
+    # 6. Envia a nova lista "enriquecida" para o template
     return render_template('gerir_lancamentos.html',
-                           vendas=vendas_recentes,
+                           vendas=vendas_enriquecidas,  # <- A lista agora tem os itens!
                            despesas=despesas_recentes)
 
 @app.route("/financeiro/excluir_venda/<int:venda_id>", methods=['POST'])
