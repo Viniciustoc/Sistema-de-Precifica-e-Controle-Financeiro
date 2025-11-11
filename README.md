@@ -16,7 +16,7 @@ Esta aplicação substitui o "achismo" por **dados**, oferecendo uma plataforma 
 
 | Painel de Precificação (Custo Unitário) |  Dashboard de BI (Lucro Líquido)   |
 |:---------------------------------------:|:----------------------------------:|
-|     ![Sugestão de Preço de Venda(![img.png](img.png))      | ![Dashboard Financeiro](img_2.png) |
+| ![Sugestão de Preço de Venda](img.png)  | ![Dashboard Financeiro](img_2.png) |
 
 ---
 
