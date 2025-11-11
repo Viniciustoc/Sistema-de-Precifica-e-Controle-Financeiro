@@ -14,9 +14,9 @@ Esta aplicação substitui o "achismo" por **dados**, oferecendo uma plataforma 
 
 *(Nota: Substitua as URLs abaixo pelos seus próprios prints de tela. O GitHub permite que você arraste e solte imagens diretamente no `README.md` para gerar o link).*
 
-| Painel de Precificação (Custo Unitário) | Dashboard de BI (Lucro Líquido) |
-|:---------------------------------------:| :---: |
-|     ![Sugestão de Preço de Venda(![img.png](img.png))      | ![Dashboard Financeiro](![img_2.png](img_2.png)) |
+| Painel de Precificação (Custo Unitário) |  Dashboard de BI (Lucro Líquido)   |
+|:---------------------------------------:|:----------------------------------:|
+|     ![Sugestão de Preço de Venda(![img.png](img.png))      | ![Dashboard Financeiro](img_2.png) |
 
 ---
 
